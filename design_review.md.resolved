@@ -1,0 +1,162 @@
+# win-symlinks 设计方案审核报告
+
+## 总体评价
+
+这是一份**高质量的设计文档**。架构清晰、职责分离合理、安全意识突出。文档结构完整，涵盖了从接口定义到测试计划的全链条。以下按 **肯定** → **问题** → **建议** 三个维度展开。
+
+---
+
+## ✅ 设计亮点
+
+| 方面 | 评价 |
+|------|------|
+| **职责分离** | `ln.exe` / `win-symlinks.exe` / `WinSymlinksBroker` 三者边界清晰，遵循单一职责 |
+| **零回退策略** | 明确拒绝 junction、hardlink、`.lnk`、copy 等替代品，语义纯粹 |
+| **安全纵深** | 黑名单 + 路径规范化 + reparse point 解析 + 8.3 短名展开，防御链条完整 |
+| **可诊断性** | `doctor` 命令设计全面，涵盖 PATH 冲突、服务状态、开发者模式等 |
+| **可审计性** | manifest.jsonl + 日志目录设计合理，且明确"不作为文件系统真实状态的来源" |
+| **IPC 协议** | JSON v1 协议简单直接，留有升级空间 |
+| **安装无依赖** | 不要求 MSI/GUI，支持 `sc.exe` 和 PowerShell 手动注册作为备选 |
+
+---
+
+## ⚠️ 需要关注的问题
+
+### 1. 安全模型：黑名单的固有缺陷未充分缓解
+
+文档承认黑名单 "less robust than an allowlist"（第 286 行），但缓解措施不足：
+
+- **NTFS alternate data streams (ADS)** 未提及。攻击者可以构造 `C:\Safe\file.txt:$DATA` 或利用 ADS 语法绕过前缀匹配。
+- **路径长度滥用**：超过 `MAX_PATH` (260) 的路径在 Windows 上行为不一致，规范化器需要显式处理 `\\?\` 前缀路径。
+- **符号链接指向黑名单区域的间接攻击**：黑名单只检查 `link_path`，但如果 `target_path` 指向系统关键目录，创建出的 symlink 也可能被滥用（例如 DLL planting）。虽然这超出 "symlink creation" 的范围，但设计文档应明确声明其威胁模型边界。
+- **TOCTOU（Time-of-check-to-time-of-use）**：路径规范化和实际创建之间存在竞争窗口。文档应至少承认这一点并说明可接受的风险级别。
+
+> [!IMPORTANT]
+> 建议在文档中增加一个 **"Threat Model & Limitations"** 章节，明确列出黑名单策略不覆盖的攻击面，包括 ADS、长路径、TOCTOU、以及 `target_path` 不受限的设计决策。
+
+### 2. IPC 安全：Named Pipe 的 ACL 和认证未定义
+
+Named Pipe `\\.\pipe\win-symlinks-broker` 的安全描述符（DACL）没有任何规范：
+
+- 谁可以连接？所有本地用户？仅 Interactive 用户？
+- 是否限制远程连接？（Named Pipe 默认可以通过 SMB 远程访问）
+- 客户端身份如何验证？文档提到"Identify the calling user from the Named Pipe client"（第 196 行），但没有指定使用 `ImpersonateNamedPipeClient` 还是 `GetNamedPipeClientProcessId` 或其他机制。
+
+> [!WARNING]
+> 在没有显式 DACL 的情况下，Named Pipe 可能继承默认安全描述符，允许所有本地用户（甚至远程用户）发送请求。这对一个以 SYSTEM 权限运行的服务来说风险极高。
+
+### 3. 并发模型未定义
+
+Broker 作为 Windows Service 需要处理多个并发 `ln.exe` 请求：
+
+- 是单线程串行处理、线程池还是异步 I/O？
+- Named Pipe 是 single-instance 还是 multi-instance？
+- 多个请求同时操作同一个 `link_path` 时的行为是什么？
+- 文件系统操作是否有锁机制？
+
+对于 v1 来说，单线程串行可能足够，但文档应明确声明。
+
+### 4. 服务运行身份和启动类型未明确
+
+- 服务以什么身份运行？`Local System`？`Local Service`？`Network Service`？这直接影响权限范围和攻击面。
+- 启动类型是 `Automatic`（文档示例中暗示）还是 `Manual`？`Automatic` 意味着每次开机都启动，对偶尔使用 symlinks 的用户来说可能过重。
+- 建议考虑 **`Automatic (Delayed Start)`** 或 **`Manual` + 按需启动**（`ln.exe` 检测服务未运行时自动启动）。
+
+### 5. `target_kind` 推断逻辑存在歧义
+
+第 270-280 行定义了 target 不存在时的处理规则，但：
+
+- `ln.exe` 如何将 `target_kind` 传递给 broker？CLI 参数中没有定义 `--directory` 或 `--file` 选项。
+- 如果 target 存在但在 `ln.exe` 检查和 broker 创建之间被删除（又一个 TOCTOU），应该以谁的判断为准？
+- 建议：**由 broker 侧做最终判断**，`ln.exe` 只做 hint 传递。
+
+### 6. 错误恢复和幂等性
+
+- `ln -sf` 的替换操作是"先删后建"两步操作。如果删除成功但创建失败，原 symlink 已丢失。文档未讨论这种中间状态。
+- 建议考虑：先创建临时链接 → 原子性 rename 替换（如果 Windows 支持），或至少在文档中声明"替换不是原子操作"。
+
+---
+
+## 💡 改进建议
+
+### 架构层面
+
+| # | 建议 | 优先级 |
+|---|------|--------|
+| A1 | 增加 **Threat Model** 章节，明确安全边界和不覆盖的攻击面 | 🔴 高 |
+| A2 | 定义 Named Pipe 的 **DACL**（建议：仅 Local Interactive Users + 拒绝远程） | 🔴 高 |
+| A3 | 明确服务 **运行身份**（建议 `Local System` 并在威胁模型中说明原因） | 🔴 高 |
+| A4 | 定义 broker 的 **并发策略**（建议 v1 声明单线程串行） | 🟡 中 |
+| A5 | 声明 `ln -sf` 替换 **非原子性**，或设计临时文件 + rename 方案 | 🟡 中 |
+| A6 | 定义 Named Pipe 的 **超时和重试策略**（客户端连接超时、请求超时） | 🟡 中 |
+
+### 接口层面
+
+| # | 建议 | 优先级 |
+|---|------|--------|
+| B1 | 在 `ln.exe` CLI 中增加 `--type file\|dir` 参数用于 missing target 场景 | 🟡 中 |
+| B2 | IPC 协议中增加 **request ID**（`"request_id": "uuid"`）用于日志关联 | 🟢 低 |
+| B3 | 考虑 `win-symlinks.exe service start / stop` 子命令 | 🟢 低 |
+| B4 | `doctor` 增加检查 Named Pipe DACL 是否正确配置 | 🟢 低 |
+| B5 | 考虑增加 `ln -v` (verbose) 用于调试 | 🟢 低 |
+
+### 实现层面
+
+| # | 建议 | 优先级 |
+|---|------|--------|
+| C1 | 考虑使用 `tokio` 做异步 Named Pipe I/O，为未来并发做准备 | 🟡 中 |
+| C2 | `windows-service` crate 版本 `0.7` 需要核实是否存在——该 crate 目前最新版本可能不同 | 🟡 中 |
+| C3 | 考虑引入 `clap` 做 CLI 参数解析（文档 crate 列表未包含） | 🟡 中 |
+| C4 | 日志建议使用 `tracing` crate 替代自定义日志 | 🟢 低 |
+| C5 | Cargo workspace 结构可能优于 single package + multiple bins | 🟢 低 |
+
+### 测试层面
+
+| # | 建议 | 优先级 |
+|---|------|--------|
+| D1 | 增加 **ADS 路径绕过** 测试用例 | 🔴 高 |
+| D2 | 增加 **长路径 (`\\?\`)** 测试用例 | 🟡 中 |
+| D3 | 增加 **Named Pipe 权限拒绝** 测试用例 | 🟡 中 |
+| D4 | 增加 **并发请求同一 link_path** 测试用例 | 🟡 中 |
+| D5 | 手动验收场景缺少 **`service install` 需要管理员 shell** 的说明（第 619 行说 non-admin 但 621 行就调 `service install`，矛盾） | 🟡 中 |
+
+---
+
+## 🐛 文档缺陷
+
+### 手动验收场景自相矛盾（第 619-629 行）
+
+```text
+Run from a non-admin shell on Windows 11 with Developer Mode disabled:
+
+    win-symlinks.exe service install    ← 需要管理员权限
+```
+
+文档指示从 **non-admin shell** 执行，但 `service install` 明确需要管理员权限（第 385 行也这么说）。应改为：
+
+> 先在管理员 shell 中执行 `service install`，然后切换到 non-admin shell 执行后续 `ln` 命令。
+
+### `source_blacklist` 配置与默认值重叠
+
+第 323-333 行的配置示例中 `source_blacklist` 包含了默认项。没有说明用户配置是**覆盖**还是**追加**默认黑名单。如果是覆盖，用户可能意外缩小保护范围。
+
+### 缺少版本和修订历史
+
+设计文档没有版本号或修订记录，增加 changelog 节有助于追踪决策演变。
+
+---
+
+## 📋 审核结论
+
+| 维度 | 评级 | 说明 |
+|------|------|------|
+| 架构设计 | ⭐⭐⭐⭐ | 职责分离出色，进程模型合理 |
+| 安全设计 | ⭐⭐⭐ | 黑名单策略本身有风险，且 IPC 安全定义不足 |
+| 接口设计 | ⭐⭐⭐⭐ | CLI 设计与 Linux 对齐良好，缺少少量实用选项 |
+| 测试覆盖 | ⭐⭐⭐⭐ | 核心场景覆盖好，缺少安全边界测试 |
+| 文档质量 | ⭐⭐⭐⭐ | 结构清晰、措辞精确，有少量矛盾 |
+
+**总体评级：⭐⭐⭐⭐ (4/5)** — 架构和接口设计成熟，安全模型需要补充威胁边界定义和 IPC 加固后可进入实现阶段。
+
+> [!TIP]
+> 建议优先解决 A1-A3（威胁模型、Pipe ACL、服务身份）三个高优先级问题后再开始编码，其余问题可在实现过程中迭代完善。
