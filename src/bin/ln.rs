@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::path::PathBuf;
 use win_symlinks::ipc::CreateSymlinkRequest;
-use win_symlinks::symlink::TargetKind;
+use win_symlinks::symlink::{CreateSymlinkOptions, DirectCreateOutcome, TargetKind};
 use win_symlinks::{ErrorCode, WinSymlinksError};
 
 #[derive(Debug, Parser)]
@@ -44,16 +44,26 @@ fn main() {
 
 fn run(cli: Cli) -> Result<(), WinSymlinksError> {
     let command = parse_link_command(cli)?;
+    let options = CreateSymlinkOptions {
+        link_path: command.request.link_path.clone(),
+        target_path: command.request.target_path.clone(),
+        target_kind: command.request.target_kind,
+        replace_existing_symlink: command.request.replace_existing_symlink,
+        allow_unprivileged_direct_create: true,
+    };
 
     tracing::debug!(
         request = ?command.request,
         no_target_directory = command.no_target_directory
     );
 
-    Err(WinSymlinksError::new(
-        ErrorCode::ServiceUnavailable,
-        "ln argument parsing is ready; direct and broker link creation are not implemented yet",
-    ))
+    match win_symlinks::symlink::try_direct_create(&options)? {
+        DirectCreateOutcome::Created => Ok(()),
+        DirectCreateOutcome::NeedsBroker => Err(WinSymlinksError::new(
+            ErrorCode::ServiceUnavailable,
+            "direct symbolic link creation needs the broker; broker IPC is not implemented yet",
+        )),
+    }
 }
 
 fn parse_link_command(cli: Cli) -> Result<ParsedLinkCommand, WinSymlinksError> {

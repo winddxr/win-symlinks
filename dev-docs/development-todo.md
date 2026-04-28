@@ -46,12 +46,12 @@ cargo check
 
 Goal: implement the unprivileged/direct path while preserving the same true symlink semantics as the broker path.
 
-- [ ] Wrap `CreateSymbolicLinkW` in `src/symlink`.
-- [ ] Use `SYMBOLIC_LINK_FLAG_DIRECTORY` for directory symlinks.
-- [ ] Use `SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE` only for direct client attempts.
-- [ ] Distinguish privilege failure from other create failures.
-- [ ] Return `TARGET_KIND_REQUIRED`, `LINK_ALREADY_EXISTS`, `TARGET_KIND_CONFLICT`, and `CREATE_SYMLINK_FAILED` as appropriate.
-- [ ] Confirm direct creation never falls back to junctions, hardlinks, copies, or `.lnk` files.
+- [x] Wrap `CreateSymbolicLinkW` in `src/symlink`.
+- [x] Use `SYMBOLIC_LINK_FLAG_DIRECTORY` for directory symlinks.
+- [x] Use `SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE` only for direct client attempts.
+- [x] Distinguish privilege failure from other create failures.
+- [x] Return `TARGET_KIND_REQUIRED`, `LINK_ALREADY_EXISTS`, `TARGET_KIND_CONFLICT`, and `CREATE_SYMLINK_FAILED` as appropriate.
+- [x] Confirm direct creation never falls back to junctions, hardlinks, copies, or `.lnk` files.
 
 Verification:
 

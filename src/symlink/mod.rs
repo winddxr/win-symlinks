@@ -1,7 +1,28 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+#[cfg(windows)]
+use std::os::windows::{ffi::OsStrExt, fs::MetadataExt};
+
+#[cfg(windows)]
+use windows::{
+    core::PCWSTR,
+    Win32::{
+        Foundation::{
+            GetLastError, ERROR_ALREADY_EXISTS, ERROR_FILE_EXISTS, ERROR_PRIVILEGE_NOT_HELD,
+            WIN32_ERROR,
+        },
+        Storage::FileSystem::{
+            CreateSymbolicLinkW, SYMBOLIC_LINK_FLAGS, SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE,
+            SYMBOLIC_LINK_FLAG_DIRECTORY,
+        },
+    },
+};
+
+#[cfg(windows)]
+const FILE_ATTRIBUTE_REPARSE_POINT_BITS: u32 = 0x400;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
 #[serde(rename_all = "lowercase")]
@@ -118,11 +139,154 @@ pub fn plan_replacement(
     }
 }
 
-pub fn try_direct_create(_options: &CreateSymlinkOptions) -> crate::Result<DirectCreateOutcome> {
+pub fn inspect_link_path_state(path: impl AsRef<Path>) -> crate::Result<LinkPathState> {
+    let metadata = match fs::symlink_metadata(path.as_ref()) {
+        Ok(metadata) => metadata,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(LinkPathState::Missing),
+        Err(err) => {
+            return Err(crate::WinSymlinksError::new(
+                crate::ErrorCode::CreateSymlinkFailed,
+                format!("failed to inspect link path: {err}"),
+            ));
+        }
+    };
+
+    let file_type = metadata.file_type();
+    if file_type.is_symlink() {
+        return Ok(LinkPathState::SymbolicLink);
+    }
+
+    #[cfg(windows)]
+    if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT_BITS != 0 {
+        return Ok(LinkPathState::OtherReparsePoint);
+    }
+
+    if metadata.is_dir() {
+        Ok(LinkPathState::Directory)
+    } else if metadata.is_file() {
+        Ok(LinkPathState::File)
+    } else {
+        Ok(LinkPathState::Other)
+    }
+}
+
+pub fn try_direct_create(options: &CreateSymlinkOptions) -> crate::Result<DirectCreateOutcome> {
+    let target_kind = decide_target_kind(&options.target_path, options.target_kind)?;
+    let link_state = inspect_link_path_state(&options.link_path)?;
+    let replacement_plan = plan_replacement(link_state, options.replace_existing_symlink)?;
+
+    if replacement_plan == ReplacementPlan::ReplaceExistingSymlink {
+        return Ok(DirectCreateOutcome::NeedsBroker);
+    }
+
+    match create_symbolic_link(
+        &options.link_path,
+        &options.target_path,
+        target_kind,
+        options.allow_unprivileged_direct_create,
+    ) {
+        Ok(()) => Ok(DirectCreateOutcome::Created),
+        Err(err) if err.code() == crate::ErrorCode::PrivilegeRequired => {
+            Ok(DirectCreateOutcome::NeedsBroker)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+pub fn create_symbolic_link(
+    link_path: &Path,
+    target_path: &Path,
+    target_kind: TargetKind,
+    allow_unprivileged_direct_create: bool,
+) -> crate::Result<()> {
+    create_symbolic_link_platform(
+        link_path,
+        target_path,
+        target_kind,
+        allow_unprivileged_direct_create,
+    )
+}
+
+#[cfg(not(windows))]
+fn create_symbolic_link_platform(
+    _link_path: &Path,
+    _target_path: &Path,
+    _target_kind: TargetKind,
+    _allow_unprivileged_direct_create: bool,
+) -> crate::Result<()> {
     Err(crate::WinSymlinksError::new(
         crate::ErrorCode::CreateSymlinkFailed,
-        "direct symbolic link creation is not implemented yet",
+        "Windows symbolic link creation is only available on Windows",
     ))
+}
+
+#[cfg(windows)]
+fn create_symbolic_link_platform(
+    link_path: &Path,
+    target_path: &Path,
+    target_kind: TargetKind,
+    allow_unprivileged_direct_create: bool,
+) -> crate::Result<()> {
+    let link_path = path_to_wide_null(link_path);
+    let target_path = path_to_wide_null(target_path);
+    let flags = symbolic_link_flags(target_kind, allow_unprivileged_direct_create);
+
+    let created = unsafe {
+        CreateSymbolicLinkW(
+            PCWSTR(link_path.as_ptr()),
+            PCWSTR(target_path.as_ptr()),
+            flags,
+        )
+    };
+
+    if created {
+        Ok(())
+    } else {
+        let error = unsafe { GetLastError() };
+        Err(map_create_symbolic_link_error(error))
+    }
+}
+
+#[cfg(windows)]
+fn symbolic_link_flags(
+    target_kind: TargetKind,
+    allow_unprivileged_direct_create: bool,
+) -> SYMBOLIC_LINK_FLAGS {
+    let mut flags = SYMBOLIC_LINK_FLAGS(0);
+    if target_kind == TargetKind::Dir {
+        flags |= SYMBOLIC_LINK_FLAG_DIRECTORY;
+    }
+    if allow_unprivileged_direct_create {
+        flags |= SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE;
+    }
+    flags
+}
+
+#[cfg(windows)]
+fn path_to_wide_null(path: &Path) -> Vec<u16> {
+    path.as_os_str().encode_wide().chain(Some(0)).collect()
+}
+
+#[cfg(windows)]
+fn map_create_symbolic_link_error(error: WIN32_ERROR) -> crate::WinSymlinksError {
+    let (code, message) = if error == ERROR_PRIVILEGE_NOT_HELD {
+        (
+            crate::ErrorCode::PrivilegeRequired,
+            "symbolic link privilege is not held by this process".to_string(),
+        )
+    } else if error == ERROR_ALREADY_EXISTS || error == ERROR_FILE_EXISTS {
+        (
+            crate::ErrorCode::LinkAlreadyExists,
+            "link path already exists".to_string(),
+        )
+    } else {
+        (
+            crate::ErrorCode::CreateSymlinkFailed,
+            format!("CreateSymbolicLinkW failed with Windows error {}", error.0),
+        )
+    };
+
+    crate::WinSymlinksError::new(code, message)
 }
 
 #[cfg(test)]
@@ -224,5 +388,51 @@ mod tests {
         let err = plan_replacement(LinkPathState::OtherReparsePoint, true).unwrap_err();
 
         assert_eq!(err.code(), ErrorCode::UnsafeReparsePoint);
+    }
+
+    #[test]
+    fn inspects_missing_file_and_directory_link_states() {
+        let missing = temp_path("missing-link-state");
+        let file = temp_path("file-link-state");
+        let dir = temp_path("dir-link-state");
+        fs::write(&file, b"link").unwrap();
+        fs::create_dir(&dir).unwrap();
+
+        assert_eq!(
+            inspect_link_path_state(&missing).unwrap(),
+            LinkPathState::Missing
+        );
+        assert_eq!(inspect_link_path_state(&file).unwrap(), LinkPathState::File);
+        assert_eq!(
+            inspect_link_path_state(&dir).unwrap(),
+            LinkPathState::Directory
+        );
+
+        fs::remove_file(file).unwrap();
+        fs::remove_dir(dir).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn symbolic_link_flags_include_only_requested_bits() {
+        let file_direct = symbolic_link_flags(TargetKind::File, true);
+        let dir_privileged = symbolic_link_flags(TargetKind::Dir, false);
+
+        assert!(file_direct.contains(SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE));
+        assert!(!file_direct.contains(SYMBOLIC_LINK_FLAG_DIRECTORY));
+        assert!(dir_privileged.contains(SYMBOLIC_LINK_FLAG_DIRECTORY));
+        assert!(!dir_privileged.contains(SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn maps_privilege_failure_separately_from_create_failures() {
+        let privilege_error = map_create_symbolic_link_error(ERROR_PRIVILEGE_NOT_HELD);
+        let exists_error = map_create_symbolic_link_error(ERROR_ALREADY_EXISTS);
+        let other_error = map_create_symbolic_link_error(WIN32_ERROR(3));
+
+        assert_eq!(privilege_error.code(), ErrorCode::PrivilegeRequired);
+        assert_eq!(exists_error.code(), ErrorCode::LinkAlreadyExists);
+        assert_eq!(other_error.code(), ErrorCode::CreateSymlinkFailed);
     }
 }
