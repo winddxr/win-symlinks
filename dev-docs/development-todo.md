@@ -67,12 +67,12 @@ Manual Windows verification should confirm created filesystem objects are true s
 
 Goal: make `win-symlinks.exe` manage `WinSymlinksBroker` without putting management behavior in `ln.exe`.
 
-- [ ] Implement `service install` with `CreateServiceW`.
-- [ ] Configure service name `WinSymlinksBroker`, display name `Win Symlinks Broker`, `LocalSystem`, and delayed automatic start.
-- [ ] Implement `service uninstall`, stopping first when needed.
-- [ ] Implement `service start`, `service stop`, and `service status`.
-- [ ] Keep administrator-required failures clear.
-- [ ] Implement `config show` with effective built-in and user blacklist entries.
+- [x] Implement `service install` with `CreateServiceW`.
+- [x] Configure service name `WinSymlinksBroker`, display name `Win Symlinks Broker`, `LocalSystem`, and delayed automatic start.
+- [x] Implement `service uninstall`, stopping first when needed.
+- [x] Implement `service start`, `service stop`, and `service status`.
+- [x] Keep administrator-required failures clear.
+- [x] Implement `config show` with effective built-in and user blacklist entries.
 
 Verification:
 

@@ -65,18 +65,41 @@ fn run(cli: Cli) -> Result<(), WinSymlinksError> {
 
 fn service_command(command: ServiceCommand) -> Result<(), WinSymlinksError> {
     match command {
-        ServiceCommand::Status => {
-            let state = service::query_service_state()?;
-            println!("{state:?}");
+        ServiceCommand::Install => {
+            service::install_service()?;
+            println!(
+                "installed {} ({})",
+                service::SERVICE_NAME,
+                service::SERVICE_DISPLAY_NAME
+            );
             Ok(())
         }
-        ServiceCommand::Install
-        | ServiceCommand::Uninstall
-        | ServiceCommand::Start
-        | ServiceCommand::Stop => Err(WinSymlinksError::new(
-            ErrorCode::ServiceUnavailable,
-            format!("service {command:?} is not implemented yet"),
-        )),
+        ServiceCommand::Uninstall => {
+            service::uninstall_service()?;
+            println!("uninstalled {}", service::SERVICE_NAME);
+            Ok(())
+        }
+        ServiceCommand::Start => {
+            service::start_service()?;
+            println!("started {}", service::SERVICE_NAME);
+            Ok(())
+        }
+        ServiceCommand::Stop => {
+            service::stop_service()?;
+            println!("stopped {}", service::SERVICE_NAME);
+            Ok(())
+        }
+        ServiceCommand::Status => {
+            let state = service::query_service_state()?;
+            println!("service: {}", service::SERVICE_NAME);
+            println!("display_name: {}", service::SERVICE_DISPLAY_NAME);
+            println!(
+                "installed: {}",
+                state != win_symlinks::service::ServiceState::NotInstalled
+            );
+            println!("state: {state}");
+            Ok(())
+        }
     }
 }
 
