@@ -111,15 +111,15 @@ Manual or integration verification must include unavailable service and wrong-se
 
 Goal: enforce the broker security contract before privileged symlink creation.
 
-- [ ] Validate request schema and protocol version.
-- [ ] Impersonate the Named Pipe client and identify a concrete local user SID.
-- [ ] Reject remote, anonymous, and network logon clients.
-- [ ] Normalize `link_path` and `target_path` before policy checks.
-- [ ] Enforce the source blacklist against normalized `link_path`.
-- [ ] While impersonating the caller, verify write/create permission on the `link_path` parent directory.
-- [ ] Re-check safe replacement conditions immediately before deletion.
-- [ ] Return to the service token before calling privileged `CreateSymbolicLinkW`.
-- [ ] Write audit log entries for successful privileged operations.
+- [x] Validate request schema and protocol version.
+- [x] Impersonate the Named Pipe client and identify a concrete local user SID.
+- [x] Reject remote, anonymous, and network logon clients.
+- [x] Normalize `link_path` and `target_path` before policy checks.
+- [x] Enforce the source blacklist against normalized `link_path`.
+- [x] While impersonating the caller, verify write/create permission on the `link_path` parent directory.
+- [x] Re-check safe replacement conditions immediately before deletion.
+- [x] Return to the service token before calling privileged `CreateSymbolicLinkW`.
+- [x] Write audit log entries for successful privileged operations.
 
 Verification:
 

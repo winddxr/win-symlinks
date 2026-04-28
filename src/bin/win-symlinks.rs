@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use win_symlinks::config::{default_config_path, AppConfig};
+use win_symlinks::config::{default_config_path, load_config};
 use win_symlinks::service;
 use win_symlinks::{ErrorCode, WinSymlinksError};
 
@@ -104,7 +104,7 @@ fn service_command(command: ServiceCommand) -> Result<(), WinSymlinksError> {
 }
 
 fn show_config() -> Result<(), WinSymlinksError> {
-    let config = AppConfig::default();
+    let config = load_config()?;
     let effective_source_blacklist =
         win_symlinks::path_policy::merge_source_blacklist(&config.additional_source_blacklist);
     let json = serde_json::json!({
