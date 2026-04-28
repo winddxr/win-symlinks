@@ -88,14 +88,14 @@ Manual administrator-shell verification is required for install/start/status/sto
 
 Goal: connect `ln.exe` to the broker over local Named Pipe IPC with stable JSON payloads and timeouts.
 
-- [ ] Implement Named Pipe server at `\\.\pipe\win-symlinks-broker`.
-- [ ] Create the pipe from the broker service only.
-- [ ] Use `PIPE_REJECT_REMOTE_CLIENTS`.
-- [ ] Apply an explicit DACL granting only the documented local principals and minimum client read/write access.
-- [ ] Implement client connection timeout of 3 seconds and request timeout of 30 seconds.
-- [ ] Verify connected server process identity before sending privileged requests.
-- [ ] Return `SERVICE_IDENTITY_MISMATCH` if the pipe server is not the installed broker service process.
-- [ ] Serialize filesystem mutation processing in the broker.
+- [x] Implement Named Pipe server at `\\.\pipe\win-symlinks-broker`.
+- [x] Create the pipe from the broker service only.
+- [x] Use `PIPE_REJECT_REMOTE_CLIENTS`.
+- [x] Apply an explicit DACL granting only the documented local principals and minimum client read/write access.
+- [x] Implement client connection timeout of 3 seconds and request timeout of 30 seconds.
+- [x] Verify connected server process identity before sending privileged requests.
+- [x] Return `SERVICE_IDENTITY_MISMATCH` if the pipe server is not the installed broker service process.
+- [x] Serialize filesystem mutation processing in the broker.
 
 Verification:
 

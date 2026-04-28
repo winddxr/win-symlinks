@@ -53,6 +53,10 @@ pub fn query_service_state() -> crate::Result<ServiceState> {
     platform::query_service_state()
 }
 
+pub fn query_service_process_id() -> crate::Result<Option<u32>> {
+    platform::query_service_process_id()
+}
+
 pub fn run_broker_service() -> crate::Result<()> {
     platform::run_broker_service()
 }
@@ -63,7 +67,10 @@ mod platform {
     use crate::{ErrorCode, Result, WinSymlinksError};
     use std::ffi::{OsStr, OsString};
     use std::path::PathBuf;
-    use std::sync::mpsc;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc,
+    };
     use std::time::{Duration, Instant};
     use windows_service::define_windows_service;
     use windows_service::service::{
@@ -194,6 +201,18 @@ mod platform {
         }
     }
 
+    pub fn query_service_process_id() -> Result<Option<u32>> {
+        let manager = service_manager(ServiceManagerAccess::CONNECT, "open service manager")?;
+        match manager.open_service(SERVICE_NAME, ServiceAccess::QUERY_STATUS) {
+            Ok(service) => Ok(service
+                .query_status()
+                .map_err(|err| map_service_error("query service process id", err))?
+                .process_id),
+            Err(err) if service_error_code(&err) == Some(ERROR_SERVICE_DOES_NOT_EXIST) => Ok(None),
+            Err(err) => Err(map_service_error("query service process id", err)),
+        }
+    }
+
     pub fn run_broker_service() -> Result<()> {
         service_dispatcher::start(SERVICE_NAME, ffi_service_main)
             .map_err(|err| map_service_error("run broker service dispatcher", err))
@@ -225,13 +244,25 @@ mod platform {
             ServiceControlAccept::STOP,
         )?;
 
+        let should_stop = Arc::new(AtomicBool::new(false));
+        let ipc_should_stop = Arc::clone(&should_stop);
+        let ipc_thread =
+            std::thread::spawn(move || crate::ipc::run_broker_pipe_server(ipc_should_stop));
+
         let _ = stop_rx.recv();
+        should_stop.store(true, Ordering::SeqCst);
+        crate::ipc::wake_broker_pipe_server();
 
         set_service_status(
             &status_handle,
             windows_service::service::ServiceState::StopPending,
             ServiceControlAccept::empty(),
         )?;
+        match ipc_thread.join() {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => tracing::error!(%err, "broker IPC server exited with error"),
+            Err(_) => tracing::error!("broker IPC server thread panicked"),
+        }
         set_service_status(
             &status_handle,
             windows_service::service::ServiceState::Stopped,
@@ -434,6 +465,10 @@ mod platform {
 
     pub fn query_service_state() -> Result<ServiceState> {
         Ok(ServiceState::NotInstalled)
+    }
+
+    pub fn query_service_process_id() -> Result<Option<u32>> {
+        Ok(None)
     }
 
     pub fn run_broker_service() -> Result<()> {

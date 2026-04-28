@@ -59,10 +59,9 @@ fn run(cli: Cli) -> Result<(), WinSymlinksError> {
 
     match win_symlinks::symlink::try_direct_create(&options)? {
         DirectCreateOutcome::Created => Ok(()),
-        DirectCreateOutcome::NeedsBroker => Err(WinSymlinksError::new(
-            ErrorCode::ServiceUnavailable,
-            "direct symbolic link creation needs the broker; broker IPC is not implemented yet",
-        )),
+        DirectCreateOutcome::NeedsBroker => {
+            win_symlinks::ipc::submit_create_symlink_request(command.request)
+        }
     }
 }
 
