@@ -150,7 +150,7 @@ mod platform {
                     SDDL_REVISION_1,
                 },
                 GetTokenInformation, RevertToSelf, TokenGroups, TokenUser, PSECURITY_DESCRIPTOR,
-                SECURITY_ATTRIBUTES, SID_AND_ATTRIBUTES, TOKEN_GROUPS, TOKEN_QUERY, TOKEN_USER,
+                SECURITY_ATTRIBUTES, TOKEN_GROUPS, TOKEN_QUERY, TOKEN_USER,
             },
             Storage::FileSystem::{
                 CreateFileW, FlushFileBuffers, ReadFile, WriteFile, FILE_ADD_FILE,
@@ -389,7 +389,7 @@ mod platform {
             })?;
         }
 
-        let mut security_attributes = SECURITY_ATTRIBUTES {
+        let security_attributes = SECURITY_ATTRIBUTES {
             nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
             lpSecurityDescriptor: security_descriptor.0,
             bInheritHandle: false.into(),
@@ -404,7 +404,7 @@ mod platform {
                 PIPE_BUFFER_SIZE,
                 PIPE_BUFFER_SIZE,
                 REQUEST_TIMEOUT_MS as u32,
-                Some(&mut security_attributes),
+                Some(&security_attributes),
             )
         };
         unsafe {
@@ -787,7 +787,7 @@ mod platform {
         let token_groups = unsafe { &*(bytes.as_ptr() as *const TOKEN_GROUPS) };
         let groups = unsafe {
             std::slice::from_raw_parts(
-                token_groups.Groups.as_ptr() as *const SID_AND_ATTRIBUTES,
+                token_groups.Groups.as_ptr(),
                 token_groups.GroupCount as usize,
             )
         };

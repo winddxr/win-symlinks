@@ -72,11 +72,12 @@ pub fn run_doctor() -> Result<()> {
 }
 
 pub fn collect_doctor_report() -> DoctorReport {
-    let mut checks = Vec::new();
-    checks.push(platform_check());
-    checks.push(filesystem_check());
-    checks.push(developer_mode_check());
-    checks.push(direct_symlink_check());
+    let mut checks = vec![
+        platform_check(),
+        filesystem_check(),
+        developer_mode_check(),
+        direct_symlink_check(),
+    ];
     checks.extend(service_checks());
     checks.push(named_pipe_check());
     checks.push(DoctorCheck::new(

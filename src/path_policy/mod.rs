@@ -459,7 +459,7 @@ mod tests {
             .entries()
             .iter()
             .any(|entry| entry.source == BlacklistSource::User
-                && entry.path == PathBuf::from(r"D:\SensitiveServiceData")));
+                && entry.path == std::path::Path::new(r"D:\SensitiveServiceData")));
         assert!(blacklist
             .is_blocked(Path::new(r"D:\SensitiveServiceData\child"))
             .unwrap()

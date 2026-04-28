@@ -1,5 +1,6 @@
 use clap::Parser;
-use std::path::PathBuf;
+use std::io;
+use std::path::{Path, PathBuf};
 use win_symlinks::ipc::CreateSymlinkRequest;
 use win_symlinks::symlink::{CreateSymlinkOptions, DirectCreateOutcome, TargetKind};
 use win_symlinks::{ErrorCode, WinSymlinksError};
@@ -95,9 +96,11 @@ fn parse_link_command(cli: Cli) -> Result<ParsedLinkCommand, WinSymlinksError> {
         ));
     }
 
+    let link_path = resolve_link_path(&cli.paths[1], &cli.paths[0], cli.no_target_directory)?;
+
     Ok(ParsedLinkCommand {
         request: CreateSymlinkRequest::new(
-            cli.paths[1].clone(),
+            link_path,
             cli.paths[0].clone(),
             cli.win_kind,
             cli.force,
@@ -106,14 +109,55 @@ fn parse_link_command(cli: Cli) -> Result<ParsedLinkCommand, WinSymlinksError> {
     })
 }
 
+fn resolve_link_path(
+    link_path: &Path,
+    target_path: &Path,
+    no_target_directory: bool,
+) -> Result<PathBuf, WinSymlinksError> {
+    if no_target_directory {
+        return Ok(link_path.to_path_buf());
+    }
+
+    match std::fs::metadata(link_path) {
+        Ok(metadata) if metadata.is_dir() => {
+            let target_name = target_path.file_name().ok_or_else(|| {
+                WinSymlinksError::new(
+                    ErrorCode::PathNormalizationFailed,
+                    format!(
+                        "target path has no final component for destination directory: {}",
+                        target_path.display()
+                    ),
+                )
+            })?;
+            Ok(link_path.join(target_name))
+        }
+        Ok(_) => Ok(link_path.to_path_buf()),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(link_path.to_path_buf()),
+        Err(err) => Err(WinSymlinksError::new(
+            ErrorCode::CreateSymlinkFailed,
+            format!("failed to inspect link path: {err}"),
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use clap::error::ErrorKind;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn parse(args: &[&str]) -> ParsedLinkCommand {
         parse_link_command(Cli::try_parse_from(args).expect("valid clap args"))
             .expect("valid ln command")
+    }
+
+    fn unique_temp_dir() -> PathBuf {
+        let id = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time is after UNIX epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("win-symlinks-ln-test-{id}"))
     }
 
     #[test]
@@ -139,6 +183,48 @@ mod tests {
         let command = parse(&["ln", "-sT", "target.txt", "link.txt"]);
 
         assert!(command.no_target_directory);
+    }
+
+    #[test]
+    fn places_link_inside_existing_destination_directory_without_t() {
+        let link_dir = unique_temp_dir();
+        fs::create_dir(&link_dir).expect("create temporary link directory");
+
+        let command = parse_link_command(
+            Cli::try_parse_from([
+                "ln",
+                "-s",
+                "target.txt",
+                link_dir.to_str().expect("temporary path is valid UTF-8"),
+            ])
+            .expect("valid clap args"),
+        )
+        .expect("valid ln command");
+
+        assert_eq!(command.request.link_path, link_dir.join("target.txt"));
+
+        fs::remove_dir(link_dir).expect("remove temporary link directory");
+    }
+
+    #[test]
+    fn no_target_directory_keeps_existing_destination_directory_as_link_path() {
+        let link_dir = unique_temp_dir();
+        fs::create_dir(&link_dir).expect("create temporary link directory");
+
+        let command = parse_link_command(
+            Cli::try_parse_from([
+                "ln",
+                "-sT",
+                "target.txt",
+                link_dir.to_str().expect("temporary path is valid UTF-8"),
+            ])
+            .expect("valid clap args"),
+        )
+        .expect("valid ln command");
+
+        assert_eq!(command.request.link_path, link_dir);
+
+        fs::remove_dir(link_dir).expect("remove temporary link directory");
     }
 
     #[test]
