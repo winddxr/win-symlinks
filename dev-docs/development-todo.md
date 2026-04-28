@@ -6,12 +6,12 @@ This TODO breaks implementation into bounded stages to keep agent context small 
 
 Goal: stabilize command parsing, shared errors, and IPC payload contracts before Windows-specific implementation begins.
 
-- [ ] Add focused tests for `ln -s TARGET LINK_NAME`, `ln -sf TARGET LINK_NAME`, `ln -sT TARGET LINK_NAME`, and `--win-kind=file|dir`.
-- [ ] Reject unsupported hardlink-style `ln TARGET LINK_NAME` with `UNSUPPORTED_MODE`.
-- [ ] Keep `ln.exe --help` and `ln.exe --version` service-free.
-- [ ] Finalize JSON request/response schema in `src/ipc`.
-- [ ] Add round-trip serialization tests for broker request/response payloads.
-- [ ] Ensure `ErrorCode` display strings match the documented script-friendly names.
+- [x] Add focused tests for `ln -s TARGET LINK_NAME`, `ln -sf TARGET LINK_NAME`, `ln -sT TARGET LINK_NAME`, and `--win-kind=file|dir`.
+- [x] Reject unsupported hardlink-style `ln TARGET LINK_NAME` with `UNSUPPORTED_MODE`.
+- [x] Keep `ln.exe --help` and `ln.exe --version` service-free.
+- [x] Finalize JSON request/response schema in `src/ipc`.
+- [x] Add round-trip serialization tests for broker request/response payloads.
+- [x] Ensure `ErrorCode` display strings match the documented script-friendly names.
 
 Verification:
 

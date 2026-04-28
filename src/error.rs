@@ -61,3 +61,46 @@ impl fmt::Display for WinSymlinksError {
 impl std::error::Error for WinSymlinksError {}
 
 pub type Result<T> = std::result::Result<T, WinSymlinksError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_code_display_uses_script_friendly_names() {
+        let cases = [
+            (ErrorCode::UnsupportedMode, "UNSUPPORTED_MODE"),
+            (ErrorCode::ServiceNotInstalled, "SERVICE_NOT_INSTALLED"),
+            (ErrorCode::ServiceUnavailable, "SERVICE_UNAVAILABLE"),
+            (ErrorCode::PrivilegeRequired, "PRIVILEGE_REQUIRED"),
+            (ErrorCode::SourceBlacklisted, "SOURCE_BLACKLISTED"),
+            (ErrorCode::TargetKindRequired, "TARGET_KIND_REQUIRED"),
+            (ErrorCode::LinkAlreadyExists, "LINK_ALREADY_EXISTS"),
+            (ErrorCode::LinkPathIsNotSymlink, "LINK_PATH_IS_NOT_SYMLINK"),
+            (ErrorCode::UnsafeReparsePoint, "UNSAFE_REPARSE_POINT"),
+            (ErrorCode::CreateSymlinkFailed, "CREATE_SYMLINK_FAILED"),
+            (
+                ErrorCode::PathNormalizationFailed,
+                "PATH_NORMALIZATION_FAILED",
+            ),
+            (
+                ErrorCode::ServiceIdentityMismatch,
+                "SERVICE_IDENTITY_MISMATCH",
+            ),
+            (
+                ErrorCode::CallerParentWriteDenied,
+                "CALLER_PARENT_WRITE_DENIED",
+            ),
+            (ErrorCode::TargetKindConflict, "TARGET_KIND_CONFLICT"),
+            (ErrorCode::RemoteClientRejected, "REMOTE_CLIENT_REJECTED"),
+            (
+                ErrorCode::ReplacementPartiallyCompleted,
+                "REPLACEMENT_PARTIALLY_COMPLETED",
+            ),
+        ];
+
+        for (code, expected) in cases {
+            assert_eq!(code.to_string(), expected);
+        }
+    }
+}

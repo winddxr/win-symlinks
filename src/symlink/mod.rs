@@ -5,6 +5,8 @@ use std::path::PathBuf;
 #[serde(rename_all = "lowercase")]
 pub enum TargetKind {
     File,
+    #[serde(rename = "directory")]
+    #[value(name = "dir")]
     Dir,
 }
 
