@@ -135,14 +135,16 @@ Manual security verification must cover denied parent permissions, blacklisted p
 
 Goal: prove the user workflow works under the intended Windows 11 conditions.
 
-- [ ] From an administrator shell: install and start the service.
-- [ ] From a non-admin shell with Developer Mode disabled: create file and directory symlinks through `ln.exe`.
-- [ ] Create missing-target links with `--win-kind=file` and `--win-kind=dir`.
-- [ ] Replace an existing symlink with `ln -sf`.
-- [ ] Confirm `ln -sf` refuses to replace real files and real directories.
-- [ ] Confirm created objects are symbolic links, not junctions, hardlinks, file copies, directory copies, or `.lnk` shortcuts.
-- [ ] Run `win-symlinks.exe doctor`.
-- [ ] Uninstall the service from an administrator shell.
+- [x] From an administrator shell: install and start the service.
+- [x] From a non-admin shell with Developer Mode disabled: create file and directory symlinks through `ln.exe`.
+- [x] Create missing-target links with `--win-kind=file` and `--win-kind=dir`.
+- [x] Replace an existing symlink with `ln -sf`.
+- [x] Confirm `ln -sf` refuses to replace real files and real directories.
+- [x] Confirm created objects are symbolic links, not junctions, hardlinks, file copies, directory copies, or `.lnk` shortcuts.
+- [x] Run `win-symlinks.exe doctor`.
+- [x] Uninstall the service from an administrator shell.
+
+Manual acceptance completed on Windows 11 with Developer Mode disabled. Doctor still reports remote-client rejection and Named Pipe DACL inspection as manual external security checks.
 
 Verification:
 

@@ -43,7 +43,8 @@ fn main() {
 }
 
 fn run(cli: Cli) -> Result<(), WinSymlinksError> {
-    let command = parse_link_command(cli)?;
+    let mut command = parse_link_command(cli)?;
+    command.request.link_path = absolute_link_path(&command.request.link_path)?;
     let options = CreateSymlinkOptions {
         link_path: command.request.link_path.clone(),
         target_path: command.request.target_path.clone(),
@@ -63,6 +64,21 @@ fn run(cli: Cli) -> Result<(), WinSymlinksError> {
             win_symlinks::ipc::submit_create_symlink_request(command.request)
         }
     }
+}
+
+fn absolute_link_path(path: &PathBuf) -> Result<PathBuf, WinSymlinksError> {
+    if path.is_absolute() {
+        return Ok(path.clone());
+    }
+
+    Ok(std::env::current_dir()
+        .map_err(|err| {
+            WinSymlinksError::new(
+                ErrorCode::PathNormalizationFailed,
+                format!("failed to read current directory for link path: {err}"),
+            )
+        })?
+        .join(path))
 }
 
 fn parse_link_command(cli: Cli) -> Result<ParsedLinkCommand, WinSymlinksError> {
@@ -153,5 +169,13 @@ mod tests {
 
         assert_eq!(help.kind(), ErrorKind::DisplayHelp);
         assert_eq!(version.kind(), ErrorKind::DisplayVersion);
+    }
+
+    #[test]
+    fn absolute_link_path_resolves_relative_link_against_client_cwd() {
+        let path = absolute_link_path(&PathBuf::from("link.txt")).unwrap();
+
+        assert!(path.is_absolute());
+        assert!(path.ends_with("link.txt"));
     }
 }

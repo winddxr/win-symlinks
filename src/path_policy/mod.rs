@@ -112,10 +112,12 @@ pub fn normalize_for_policy(path: &Path) -> Result<PathBuf> {
     let collapsed = collapse_dot_segments(&absolute)?;
     let path = PathBuf::from(collapsed);
 
-    if let Ok(canonical) = std::fs::canonicalize(&path) {
-        let canonical = canonical.to_string_lossy().replace('/', r"\");
-        let canonical = canonicalize_supported_windows_prefix(&canonical)?;
-        return Ok(PathBuf::from(collapse_dot_segments(&canonical)?));
+    if should_canonicalize_full_path(&path) {
+        if let Ok(canonical) = std::fs::canonicalize(&path) {
+            let canonical = canonical.to_string_lossy().replace('/', r"\");
+            let canonical = canonicalize_supported_windows_prefix(&canonical)?;
+            return Ok(PathBuf::from(collapse_dot_segments(&canonical)?));
+        }
     }
 
     Ok(path)
@@ -304,6 +306,13 @@ fn trim_trailing_separators(path: &str) -> &str {
     path.trim_end_matches(['\\', '/'])
 }
 
+fn should_canonicalize_full_path(path: &Path) -> bool {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) => !metadata.file_type().is_symlink(),
+        Err(_) => false,
+    }
+}
+
 fn policy_error(message: impl Into<String>) -> WinSymlinksError {
     WinSymlinksError::new(ErrorCode::PathNormalizationFailed, message)
 }
@@ -409,6 +418,13 @@ mod tests {
             let err = normalize_for_policy(Path::new(path)).unwrap_err();
             assert_eq!(err.code(), ErrorCode::PathNormalizationFailed);
         }
+    }
+
+    #[test]
+    fn does_not_canonicalize_missing_paths() {
+        assert!(!should_canonicalize_full_path(Path::new(
+            r"C:\path\that\should\not\exist\link"
+        )));
     }
 
     #[test]

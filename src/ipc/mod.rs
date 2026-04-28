@@ -83,6 +83,10 @@ pub fn submit_create_symlink_request(request: CreateSymlinkRequest) -> crate::Re
     platform::submit_create_symlink_request(request)
 }
 
+pub fn check_broker_pipe() -> crate::Result<()> {
+    platform::check_broker_pipe()
+}
+
 pub fn run_broker_pipe_server(should_stop: Arc<AtomicBool>) -> crate::Result<()> {
     platform::run_broker_pipe_server(should_stop)
 }
@@ -216,6 +220,11 @@ mod platform {
                 "broker client worker exited before returning a response",
             )),
         }
+    }
+
+    pub fn check_broker_pipe() -> Result<()> {
+        let _pipe = connect_verified_pipe()?;
+        Ok(())
     }
 
     pub fn run_broker_pipe_server(should_stop: Arc<AtomicBool>) -> Result<()> {
@@ -930,6 +939,13 @@ mod platform {
     use std::sync::{atomic::AtomicBool, Arc};
 
     pub fn submit_create_symlink_request(_request: CreateSymlinkRequest) -> Result<()> {
+        Err(WinSymlinksError::new(
+            ErrorCode::ServiceUnavailable,
+            "broker IPC is only supported on Windows",
+        ))
+    }
+
+    pub fn check_broker_pipe() -> Result<()> {
         Err(WinSymlinksError::new(
             ErrorCode::ServiceUnavailable,
             "broker IPC is only supported on Windows",

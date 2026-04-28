@@ -53,10 +53,7 @@ fn main() {
 fn run(cli: Cli) -> Result<(), WinSymlinksError> {
     match cli.command {
         Command::Service { command } => service_command(command),
-        Command::Doctor => Err(WinSymlinksError::new(
-            ErrorCode::ServiceUnavailable,
-            "doctor diagnostics are not implemented yet",
-        )),
+        Command::Doctor => win_symlinks::doctor::run_doctor(),
         Command::Config {
             command: ConfigCommand::Show,
         } => show_config(),
