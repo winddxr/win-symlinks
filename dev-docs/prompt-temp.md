@@ -1,0 +1,1 @@
+根据 [windows-symlink-broker-design.md](docs/windows-symlink-broker-design.md) 的设计为和 [howto-write-harness-agents-md.md](docs/howto-write-harness-agents-md.md)  为本项目编写AGENTS.md，只放入最必须的的内容。
