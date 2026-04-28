@@ -25,14 +25,14 @@ cargo check
 
 Goal: complete pure logic before any privileged broker path exists.
 
-- [ ] Complete path normalization for drive paths, supported `\\?\` forms, suspicious UNC forms, short-name handling where practical, and malformed native paths.
-- [ ] Reject ADS-style `link_path` inputs after accounting for drive-letter colons.
-- [ ] Reject or canonicalize trailing-space and trailing-dot path spellings.
-- [ ] Implement default source blacklist generation from actual system locations where possible.
-- [ ] Add user blacklist merge logic without allowing user config to replace built-ins.
-- [ ] Implement component-aware blacklist matching, including volume roots and UNC administrative shares.
-- [ ] Decide target kind from filesystem state, with `--win-kind` as a hint for missing targets.
-- [ ] Model safe replacement rules for `ln -sf`: only existing symbolic links may be replaced.
+- [x] Complete path normalization for drive paths, supported `\\?\` forms, suspicious UNC forms, short-name handling where practical, and malformed native paths.
+- [x] Reject ADS-style `link_path` inputs after accounting for drive-letter colons.
+- [x] Reject or canonicalize trailing-space and trailing-dot path spellings.
+- [x] Implement default source blacklist generation from actual system locations where possible.
+- [x] Add user blacklist merge logic without allowing user config to replace built-ins.
+- [x] Implement component-aware blacklist matching, including volume roots and UNC administrative shares.
+- [x] Decide target kind from filesystem state, with `--win-kind` as a hint for missing targets.
+- [x] Model safe replacement rules for `ln -sf`: only existing symbolic links may be replaced.
 
 Verification:
 

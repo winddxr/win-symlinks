@@ -82,10 +82,13 @@ fn service_command(command: ServiceCommand) -> Result<(), WinSymlinksError> {
 
 fn show_config() -> Result<(), WinSymlinksError> {
     let config = AppConfig::default();
+    let effective_source_blacklist =
+        win_symlinks::path_policy::merge_source_blacklist(&config.additional_source_blacklist);
     let json = serde_json::json!({
         "config_path": default_config_path(),
         "effective_config": config,
         "built_in_source_blacklist": win_symlinks::path_policy::built_in_source_blacklist().entries(),
+        "effective_source_blacklist": effective_source_blacklist.entries(),
     });
     println!(
         "{}",
