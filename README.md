@@ -69,11 +69,25 @@ cargo run --bin ln -- --help
 cargo run --bin win-symlinks -- --help
 ```
 
-## Install And Configure
+## Quick Install
 
-The recommended no-installer setup is to copy the three release executables to a
-stable installation directory, add that directory to `PATH`, then register and
-start the broker service from that same directory.
+Download the latest release zip from the
+[Releases](https://github.com/winddxr/win-symlinks/releases) page, extract the
+files, then run `install.ps1` as Administrator:
+
+```powershell
+.\install.ps1
+```
+
+The script copies the three executables to `C:\Program Files\win-symlinks` (or a
+custom path via `-InstallDir`), adds the directory to Machine `PATH`, registers
+and starts the broker service, and runs a smoke test to verify the installation.
+
+## Manual Install
+
+The manual setup copies the three release executables to a
+stable installation directory, adds that directory to `PATH`, then registers and
+starts the broker service from that same directory.
 
 ### 1. Build Release Binaries
 

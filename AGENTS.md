@@ -58,6 +58,12 @@ Use this section to record commands that should be run with escalation immediate
 - `git add` — direct escalation required; sandboxed execution consistently fails with Git index lock or permission errors.
 - `git commit` — direct escalation required; sandboxed execution consistently fails with Git index lock or permission errors.
 
+## Build & Release
+- Build release binaries: `cargo build --release`.
+- Tag a release: `git tag v<VERSION> && git push origin v<VERSION>`.
+- Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds, packages, and publishes a GitHub Release automatically.
+- CI (fmt, clippy, test, build) runs on every push to `main` and every PR via `.github/workflows/ci.yml`.
+
 ## Verification
 Before calling development work complete, run the relevant subset of:
 - `cargo fmt -- --check`
