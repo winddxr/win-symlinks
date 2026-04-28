@@ -171,13 +171,14 @@ pub fn inspect_link_path_state(path: impl AsRef<Path>) -> crate::Result<LinkPath
 }
 
 pub fn try_direct_create(options: &CreateSymlinkOptions) -> crate::Result<DirectCreateOutcome> {
-    let target_kind = decide_target_kind(&options.target_path, options.target_kind)?;
     let link_state = inspect_link_path_state(&options.link_path)?;
     let replacement_plan = plan_replacement(link_state, options.replace_existing_symlink)?;
 
     if replacement_plan == ReplacementPlan::ReplaceExistingSymlink {
         return Ok(DirectCreateOutcome::NeedsBroker);
     }
+
+    let target_kind = decide_target_kind(&options.target_path, options.target_kind)?;
 
     match create_symbolic_link(
         &options.link_path,
@@ -388,6 +389,25 @@ mod tests {
         let err = plan_replacement(LinkPathState::OtherReparsePoint, true).unwrap_err();
 
         assert_eq!(err.code(), ErrorCode::UnsafeReparsePoint);
+    }
+
+    #[test]
+    fn direct_create_reports_existing_link_path_before_missing_target_kind() {
+        let link = temp_path("existing-link-path");
+        let missing_target = temp_path("missing-target-for-existing-link");
+        fs::write(&link, b"real file").unwrap();
+        let options = CreateSymlinkOptions {
+            link_path: link.clone(),
+            target_path: missing_target,
+            target_kind: None,
+            replace_existing_symlink: false,
+            allow_unprivileged_direct_create: true,
+        };
+
+        let err = try_direct_create(&options).unwrap_err();
+
+        assert_eq!(err.code(), ErrorCode::LinkAlreadyExists);
+        fs::remove_file(link).unwrap();
     }
 
     #[test]
