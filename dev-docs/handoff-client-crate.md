@@ -211,7 +211,7 @@ only the minimum required flags and document why.
 
 ## Documentation Updates
 
-Update `docs/integration.md` to recommend:
+Update `docs/win-symlinks-integration.md` to recommend:
 
 ```toml
 [dependencies]
@@ -242,7 +242,7 @@ Update `dev-docs/design-client-interfaces.md`:
 - rename the library API section to mention `win-symlinks-client`
 - explicitly state that `ln.exe` is a consumer of the client crate
 
-Update both READMEs to link to `docs/integration.md` and mention the lightweight
+Update both READMEs to link to `docs/win-symlinks-integration.md` and mention the lightweight
 client crate.
 
 ## Test Plan

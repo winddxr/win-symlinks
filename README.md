@@ -216,7 +216,7 @@ Notes:
 
 Other Rust projects and AI coding agents should use the public client API rather
 than copying `ln.exe` internals. The lightweight SDK crate is
-`win-symlinks-client`; see [Integration Guide](docs/integration.md) for
+`win-symlinks-client`; see [Integration Guide](docs/win-symlinks-integration.md) for
 dependency snippets, Rust API examples, broker-only usage, and the raw Named
 Pipe JSON schema.
 
