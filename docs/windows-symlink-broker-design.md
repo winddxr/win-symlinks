@@ -11,8 +11,13 @@ The user-facing command is `ln.exe`, aligned as closely as practical with Linux 
 ```text
 ln.exe
   -> parses Linux-compatible ln arguments
-  -> calls WinSymlinksBroker through Named Pipe IPC when elevation is needed
+  -> calls win_symlinks::client
+  -> directly calls CreateSymbolicLinkW or calls WinSymlinksBroker when elevation is needed
   -> reports Linux-like success and error behavior
+
+External Rust projects
+  -> call win_symlinks::client
+  -> reuse the same true-symlink direct-create and broker-fallback behavior
 
 win-symlinks.exe
   -> manages service installation, service status, diagnostics, and config
@@ -72,6 +77,34 @@ The project name is:
 ```text
 win-symlinks
 ```
+
+### Library Client API
+
+The recommended integration surface for Rust projects is:
+
+```rust
+win_symlinks::client::create_symlink(options)
+win_symlinks::client::create_symlink_via_broker(options)
+```
+
+The public options preserve Linux `ln -s TARGET LINK_NAME` ordering:
+
+```rust
+pub struct CreateSymlinkOptions {
+    pub target_path: PathBuf,
+    pub link_path: PathBuf,
+    pub target_kind: Option<TargetKind>,
+    pub replace_existing_symlink: bool,
+}
+```
+
+`create_symlink` attempts direct true symbolic link creation first, then calls
+`WinSymlinksBroker` when broker privileges are needed. `create_symlink_via_broker`
+submits directly to the broker.
+
+`ln.exe` is a command-line frontend and client API consumer. External projects
+and AI agents should use the library API or documented IPC schema rather than
+copying and modifying `src/bin/ln.rs`.
 
 ### Linux-Compatible Command
 
@@ -173,13 +206,24 @@ The normal execution path is:
 ```text
 User shell
   -> ln.exe
-  -> Named Pipe request
-  -> WinSymlinksBroker
+  -> win_symlinks::client
+  -> direct CreateSymbolicLinkW or Named Pipe request
+  -> WinSymlinksBroker when broker privileges are needed
   -> CreateSymbolicLinkW
   -> response to ln.exe
 ```
 
-`ln.exe` may first attempt direct symbolic link creation if the current process has the required privilege or Windows allows unprivileged creation. If direct creation fails because of privilege, it must call the broker. Direct creation and broker creation must both use the same true symbolic link semantics.
+External Rust projects should use the same shared client API:
+
+```text
+External Rust project
+  -> win_symlinks::client
+  -> direct CreateSymbolicLinkW or Named Pipe request
+  -> WinSymlinksBroker when broker privileges are needed
+  -> CreateSymbolicLinkW
+```
+
+The client API may first attempt direct symbolic link creation if the current process has the required privilege or Windows allows unprivileged creation. If direct creation fails because of privilege, it must call the broker. Direct creation and broker creation must both use the same true symbolic link semantics.
 
 The broker is the stable path for systems where Developer Mode is disabled and the user account does not have `SeCreateSymbolicLinkPrivilege`.
 
@@ -562,14 +606,15 @@ Use these Rust dependencies:
 
 ```toml
 [dependencies]
-windows-service = "0.7"
-windows = { version = "0.58", features = [
+windows-service = "0.8"
+windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Storage_FileSystem",
   "Win32_System_Services",
   "Win32_System_Pipes",
   "Win32_System_Threading",
   "Win32_Security",
+  "Win32_Security_Authorization",
   "Win32_System_IO",
 ] }
 serde = { version = "1", features = ["derive"] }
@@ -604,6 +649,7 @@ Shared library modules:
 
 ```text
 src/ipc
+src/client
 src/path_policy
 src/symlink
 src/service
@@ -615,10 +661,18 @@ src/config
 `ln.exe`:
 
 - Parse Linux-compatible arguments.
-- Decide link path, target path, force mode, and target kind.
-- Attempt direct true symlink creation if enabled.
-- Call broker on privilege failure.
+- Decide CLI-specific link path, target path, force mode, and target kind.
+- Call `win_symlinks::client` for direct true symlink creation and broker fallback.
 - Print Linux-like errors.
+
+`win_symlinks::client`:
+
+- Provide the stable Rust integration API for creating real Windows symbolic links.
+- Preserve `ln -s TARGET LINK_NAME` target/link ordering in its public options.
+- Resolve relative `link_path` against the caller current directory.
+- Attempt direct true symlink creation when appropriate.
+- Call the broker on privilege failure or broker-only operations.
+- Never fall back to junctions, hardlinks, copies, or `.lnk` shortcuts.
 
 `win-symlinks.exe`:
 
