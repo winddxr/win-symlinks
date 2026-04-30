@@ -2,7 +2,7 @@
 
 > **English** | [简体中文](README.zh-CN.md)
 
-`win-symlinks` 为 Windows 11 提供类似 Linux 的 `ln -s TARGET LINK_NAME` 体验，使用真实的 Windows 符号链接。
+`win-symlinks` provides a Linux-like `ln -s TARGET LINK_NAME` experience on Windows 11 using real Windows symbolic links. It eliminates the need to run `ln.exe` with administrator privileges every time a symbolic link is created, while ensuring security.
 
 The project does not emulate symlinks with junctions, hardlinks, file copies, or
 `.lnk` shortcuts. If a real symbolic link cannot be created, the command fails
@@ -212,6 +212,14 @@ Notes:
 - `--win-kind=file|dir` is needed when the target does not exist and Windows
   cannot infer the symbolic link type.
 
+## Integration
+
+Other Rust projects and AI coding agents should use the public client API rather
+than copying `ln.exe` internals. The lightweight SDK crate is
+`win-symlinks-client`; see [Integration Guide](docs/integration.md) for
+dependency snippets, Rust API examples, broker-only usage, and the raw Named
+Pipe JSON schema.
+
 ## Management Commands
 
 ```powershell
@@ -253,3 +261,18 @@ schema, caller permission to create in the link parent directory, and source
 blacklist policy before creating a link.
 
 The broker creates only real Windows symbolic links.
+
+### Blocked Source Directories (Blacklist)
+
+To ensure system safety, the broker intentionally blocks creating symbolic links in certain sensitive directories (the source path for `ln`). The default source blacklist includes:
+
+- `C:\Windows` (and paths derived from `SystemRoot` / `WINDIR`)
+- `C:\Program Files` and `C:\Program Files (x86)`
+- `C:\ProgramData`
+- `C:\System Volume Information`
+- `C:\$Recycle.Bin`
+- Volume roots (e.g., `C:\`, `D:\`)
+- Other users' profile directories under `C:\Users`
+- UNC administrative shares (e.g., `\\server\C$`)
+
+Users can extend this blacklist by editing the configuration file at `%ProgramData%\win-symlinks\config.json`.

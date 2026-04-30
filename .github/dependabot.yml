@@ -5,8 +5,18 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    labels:
+      - dependencies
+      - rust
+    assignees:
+      - winddxr
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    labels:
+      - dependencies
+      - github-actions
+    assignees:
+      - winddxr

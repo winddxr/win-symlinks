@@ -2,236 +2,53 @@
 
 > [English](README.md) | **简体中文**
 
-`win-symlinks` 为 Windows 11 提供接近 Linux `ln -s TARGET LINK_NAME` 的使用体验，并且只创建真实的 Symbolic Link (符号链接)。
+`win-symlinks` 为 Windows 11 提供类似 Linux 的 `ln -s TARGET LINK_NAME` 体验，使用真实的 Windows 符号链接。本项目不需要每次创建符号链接时都以管理员权限运行 `ln.exe`，同时确保安全性。
 
-## 项目目标 (Project Goals)
-
-- 不需要每次创建符号链接时都以管理员权限运行 `ln.exe` 或 `win-symlinks.exe` 的同时确保安全性。
-- 只使用真实的 Windows Symbolic Link (符号链接)
-- 不使用 Junction (目录联接)、Hard Link (硬链接)、文件复制、目录复制或 `.lnk` 快捷方式做伪替代
-- 如果当前环境无法创建真实符号链接，就直接失败并输出清晰诊断
+本项目不使用 Junction (目录联接)、Hard Link (硬链接)、文件复制或 `.lnk` 快捷方式来模拟符号链接。如果无法创建真正的符号链接，命令将失败并给出清晰的诊断信息。
 
 ## 概述 (Overview)
 
-`win-symlinks` 由三个可执行文件组成：
+该软件包构建三个可执行文件：
 
-- `ln.exe`：面向终端用户的 Linux 风格链接命令
-- `win-symlinks.exe`：管理与诊断命令
-- `win-symlinks-broker.exe`：以 Windows Service (Windows 服务) 方式运行的特权代理
+| 可执行文件 | 用途 |
+| --- | --- |
+| `ln.exe` | 面向用户的 Linux 兼容命令，用于创建符号链接。 |
+| `win-symlinks.exe` | 管理和诊断命令。 |
+| `win-symlinks-broker.exe` | `WinSymlinksBroker` 的特权 Windows Service (Windows 服务) 宿主。 |
 
-正常工作流如下：
+正常工作流：
 
 ```text
-User Shell (用户终端) -> ln.exe -> Named Pipe (命名管道) -> WinSymlinksBroker -> CreateSymbolicLinkW
+User shell -> ln.exe -> Named Pipe -> WinSymlinksBroker -> CreateSymbolicLinkW
 ```
 
-`ln.exe` 会优先尝试直接创建真实符号链接；如果因为权限原因失败，则自动回退到 Broker Service (代理服务) 路径。两条路径都必须保持一致的真实符号链接语义。
-
-## 功能特性 (Features)
-
-- 提供 Linux 风格的 `ln -s`、`ln -sf`、`ln -sT`
-- 支持 `--win-kind=file|dir` 处理目标尚不存在的 Windows 场景
-- 通过本地 Named Pipe (命名管道) 与 `WinSymlinksBroker` 通信
-- 非管理员用户在服务已安装时也可创建真实符号链接
-- 提供 `doctor` 诊断命令，检查服务状态、PATH 冲突和当前 `ln.exe` 解析结果
-- 提供可配置的 Source Blacklist (源路径黑名单) 保护策略
+`ln.exe` 可能会先尝试直接创建真正的符号链接。如果由于权限原因直接创建失败，它将使用 Broker Service (代理服务)。这两条路径都保留真正的 Windows 符号链接语义。
 
 ## 系统要求 (Requirements)
 
-- Windows 11
-- Rust `1.82+`
-- 安装/启动/卸载服务时需要管理员 PowerShell 或管理员命令提示符
-- 运行目录建议位于 NTFS 或 ReFS 文件系统
+- Windows 11。
+- Rust 1.82 或更高版本。
+- Cargo。
+- 需要管理员权限以进行服务安装、服务启动/停止以及服务卸载。
+- 支持符号链接的文件系统和 Windows 策略配置。
+
+代理服务适用于禁用了 Developer Mode (开发者模式) 或当前用户没有 `SeCreateSymbolicLinkPrivilege` 权限的计算机。
 
 ## 构建 (Build)
 
-在项目根目录执行：
+构建所有二进制文件：
 
 ```powershell
 cargo build --release
 ```
 
-生成的二进制位于：
+发布版本的可执行文件将生成在：
 
 ```text
-target\release\ln.exe
-target\release\win-symlinks.exe
-target\release\win-symlinks-broker.exe
+target\release\
 ```
 
-## 安装 (Install)
-
-当前项目没有 MSI 安装器，推荐使用"构建后复制可执行文件"的方式安装。
-
-### 1. 选择安装目录
-
-推荐使用一个固定目录，例如：
-
-```text
-C:\Program Files\win-symlinks
-```
-
-或当前用户目录：
-
-```text
-%LOCALAPPDATA%\Programs\win-symlinks
-```
-
-### 2. 复制三个可执行文件
-
-把以下三个文件放到同一个目录中：
-
-```text
-ln.exe
-win-symlinks.exe
-win-symlinks-broker.exe
-```
-
-注意：`win-symlinks.exe service install` 会在自己的同级目录中查找 `win-symlinks-broker.exe`。因此这两个文件必须放在同一个目录里，最简单的做法是三个文件全部同目录部署。
-
-## 安装服务 (Install Service)
-
-以管理员 PowerShell 打开安装目录，然后执行：
-
-```powershell
-.\win-symlinks.exe service install
-.\win-symlinks.exe service start
-.\win-symlinks.exe service status
-```
-
-如果已经把安装目录加入 `PATH`，也可以直接执行：
-
-```powershell
-win-symlinks service install
-win-symlinks service start
-win-symlinks service status
-```
-
-成功后将会注册并启动以下服务：
-
-- Service Name (服务名称): `WinSymlinksBroker`
-- Display Name (显示名称): `Win Symlinks Broker`
-- Account (运行账户): `LocalSystem`
-
-卸载服务：
-
-```powershell
-win-symlinks service stop
-win-symlinks service uninstall
-```
-
-## 在 Windows 上使用 `ln` (Make `ln` Available On Windows)
-
-这里需要区分两类命令：
-
-- `cd` 是 Shell Built-in (Shell 内建命令)
-- `npm` 是通过 `PATH` 找到的可执行文件命令
-
-`ln.exe` 在 Windows 上的工作方式更接近 `npm`，不是 `cd` 这种内建命令。因此要让你在任意目录下直接输入 `ln`，核心就是把 `ln.exe` 所在目录加入 `PATH`。
-
-### PowerShell 配置用户级 PATH
-
-假设安装目录为：
-
-```text
-$env:LOCALAPPDATA\Programs\win-symlinks
-```
-
-可以执行：
-
-```powershell
-$InstallDir = "$env:LOCALAPPDATA\Programs\win-symlinks"
-$UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
-if ([string]::IsNullOrWhiteSpace($UserPath)) {
-    [Environment]::SetEnvironmentVariable("Path", $InstallDir, "User")
-} elseif ($UserPath -notlike "*$InstallDir*") {
-    [Environment]::SetEnvironmentVariable("Path", ($UserPath.TrimEnd(';') + ";" + $InstallDir), "User")
-}
-```
-
-然后：
-
-1. 关闭当前终端
-2. 重新打开 PowerShell 或 Windows Terminal
-3. 执行 `where.exe ln`
-
-如果输出指向你的安装目录，例如：
-
-```text
-C:\Users\<你>\AppData\Local\Programs\win-symlinks\ln.exe
-```
-
-说明 `ln` 已经可以像 `npm` 一样直接调用。
-
-### 推荐的 PATH 排序
-
-Windows 上常见的 `ln.exe` 冲突来源包括：
-
-- Git for Windows
-- MSYS2
-- Cygwin
-- BusyBox
-- coreutils
-
-如果你已经安装这些工具，请确保 `win-symlinks` 的目录排在它们前面，否则终端里输入 `ln` 时，可能会先命中别的实现。
-
-建议检查：
-
-```powershell
-where.exe ln
-win-symlinks doctor
-```
-
-## 用法 (Usage)
-
-常见用法：
-
-```powershell
-ln -s target.txt link.txt
-ln -sf target.txt link.txt
-ln -sT target.txt link.txt
-ln -s --win-kind=file future-target.txt future-link.txt
-ln -s --win-kind=dir future-target-dir future-link-dir
-```
-
-帮助与版本信息：
-
-```powershell
-ln --help
-ln --version
-win-symlinks --help
-```
-
-管理与诊断：
-
-```powershell
-win-symlinks service status
-win-symlinks doctor
-win-symlinks config show
-```
-
-## 配置 (Configuration)
-
-默认配置文件路径：
-
-```text
-C:\ProgramData\win-symlinks\config.json
-```
-
-当前支持的配置项包括：
-
-- `additional_source_blacklist` — 附加源路径黑名单
-- `allow_direct_create_attempt` — 是否允许直接创建尝试
-
-查看生效配置：
-
-```powershell
-win-symlinks config show
-```
-
-## 验证 (Verification)
-
-开发验证命令：
+有用的开发检查命令：
 
 ```powershell
 cargo fmt -- --check
@@ -239,56 +56,195 @@ cargo test
 cargo check
 ```
 
-安装后的建议检查命令：
+在构建目录运行 CLI 命令：
 
 ```powershell
-win-symlinks service status
-win-symlinks doctor
+cargo run --bin ln -- --help
+cargo run --bin win-symlinks -- --help
+```
+
+## 快速安装 (Quick Install)
+
+从 [Releases](https://github.com/winddxr/win-symlinks/releases) 页面下载最新发布的 zip 文件，提取文件，然后以管理员身份运行 `install.ps1`：
+
+```powershell
+.\install.ps1
+```
+
+该脚本会将三个可执行文件复制到 `C:\Program Files\win-symlinks`（或通过 `-InstallDir` 指定的自定义路径），将该目录添加到系统 `PATH`，注册并启动 Broker Service (代理服务)，然后运行冒烟测试以验证安装。
+
+## 手动安装 (Manual Install)
+
+手动安装会将三个发布版本的可执行文件复制到一个固定的安装目录，将该目录添加到 `PATH`，然后从同一个目录注册并启动 Broker Service (代理服务)。
+
+### 1. 构建发布版本二进制文件
+
+```powershell
+cargo build --release
+```
+
+### 2. 将二进制文件复制到固定目录
+
+以管理员身份运行 PowerShell：
+
+```powershell
+$install = "C:\Program Files\win-symlinks"
+New-Item -ItemType Directory -Force $install
+Copy-Item target\release\ln.exe $install -Force
+Copy-Item target\release\win-symlinks.exe $install -Force
+Copy-Item target\release\win-symlinks-broker.exe $install -Force
+```
+
+请勿将 `target\release` 用作长期的安装目录。Windows 服务注册会存储代理执行文件的路径，因此它应指向一个固定的位置。
+
+### 3. 将安装目录添加到 PATH
+
+从管理员 PowerShell 中配置系统范围的 PATH：
+
+```powershell
+$install = "C:\Program Files\win-symlinks"
+$machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+if (($machinePath -split ";") -notcontains $install) {
+    [Environment]::SetEnvironmentVariable("Path", "$machinePath;$install", "Machine")
+}
+```
+
+更改 `PATH` 后，请打开一个新的终端。
+
+在 `PATH` 中，`ln.exe` 应出现在 Git for Windows、MSYS2、Cygwin、BusyBox 或其他 coreutils `ln.exe` 条目之前。
+
+### 4. 安装并启动代理服务 (Broker Service)
+
+从管理员 PowerShell 中运行：
+
+```powershell
+& "C:\Program Files\win-symlinks\win-symlinks.exe" service install
+& "C:\Program Files\win-symlinks\win-symlinks.exe" service start
+& "C:\Program Files\win-symlinks\win-symlinks.exe" service status
+```
+
+`service install` 会注册 `WinSymlinksBroker` Windows 服务，并从 `win-symlinks.exe` 所在的同一目录解析 `win-symlinks-broker.exe`。
+
+### 5. 验证安装 (Verify The Installation)
+
+打开一个新的非管理员终端：
+
+```powershell
+where.exe ln
+win-symlinks.exe doctor
+```
+
+创建一个文件符号链接：
+
+```powershell
+"hello" | Set-Content target.txt
+ln -s target.txt link.txt
+Get-Item link.txt | Format-List FullName,LinkType,Target
+```
+
+创建一个目录符号链接：
+
+```powershell
+New-Item -ItemType Directory target-dir
+ln -s target-dir link-dir
+Get-Item link-dir | Format-List FullName,LinkType,Target
+```
+
+当目标尚未存在时，显式提供 Windows 链接类型：
+
+```powershell
+ln -s --win-kind=file future-target.txt future-link.txt
+ln -s --win-kind=dir future-target-dir future-link-dir
+```
+
+## PowerShell 别名说明 (PowerShell Alias Note)
+
+PowerShell 环境可能将 `ln` 定义为一个别名。如果 `ln` 未解析到本项目的可执行文件，请明确使用 `ln.exe`，或者在你的 PowerShell 配置文件中移除该别名：
+
+```powershell
+Remove-Item Alias:ln -Force -ErrorAction SilentlyContinue
+```
+
+要检查命令解析结果：
+
+```powershell
+Get-Command ln -All
 where.exe ln
 ```
 
-## 故障排除 (Troubleshooting)
+## 用法 (Usage)
 
-### `win-symlinks service install` 提示找不到 Broker
-
-请确认 `win-symlinks.exe` 与 `win-symlinks-broker.exe` 在同一目录。
-
-### `ln` 调到了别的程序
-
-执行：
+支持的形式包括：
 
 ```powershell
-where.exe ln
+ln -s TARGET LINK_NAME
+ln -sf TARGET LINK_NAME
+ln -sT TARGET LINK_NAME
+ln -s --win-kind=file TARGET LINK_NAME
+ln -s --win-kind=dir TARGET LINK_NAME
 ```
 
-如果第一条结果不是你安装的 `ln.exe`，请把 `win-symlinks` 安装目录移动到 `PATH` 更靠前的位置。
+注意事项：
 
-### 非管理员 `ln -s` 失败
+- 必须提供 `-s`。故意不支持硬链接模式。
+- `-f` 可以替换 `LINK_NAME` 处现有的符号链接。
+- `-f` 不得替换真实的文件或真实的目录。
+- `-T` 将 `LINK_NAME` 视为链接路径，而不是将链接放在现有的目标目录中。
+- 当目标不存在且 Windows 无法推断符号链接类型时，需要使用 `--win-kind=file|dir`。
 
-先检查：
+## 集成 (Integration)
+
+其他 Rust 项目和 AI 开发代理应使用公开的 client API，而不是复制 `ln.exe` 内部实现。轻量 SDK crate 是 `win-symlinks-client`；参见 [Integration Guide](docs/integration.md)，了解依赖配置、Rust API 示例、broker-only 用法和原始 Named Pipe JSON schema。
+
+## 管理命令 (Management Commands)
 
 ```powershell
-win-symlinks service status
-win-symlinks doctor
+win-symlinks.exe service install
+win-symlinks.exe service uninstall
+win-symlinks.exe service start
+win-symlinks.exe service stop
+win-symlinks.exe service status
+win-symlinks.exe doctor
+win-symlinks.exe config show
 ```
 
-如果服务未安装或未启动，请使用管理员终端执行安装与启动命令。
+## 卸载 (Uninstall)
 
-## 当前状态 (Status)
+以管理员身份运行 PowerShell：
 
-当前仓库已经实现以下能力：
+```powershell
+win-symlinks.exe service uninstall
+```
 
-- `ln.exe` 命令解析与真实符号链接创建
-- `WinSymlinksBroker` 服务注册、启动、停止、卸载
-- 本地 Named Pipe (命名管道) IPC
-- 路径黑名单与基础安全校验
-- `doctor` 与 `config show` 诊断能力
+然后从 `PATH` 中移除安装目录，并删除已安装的文件：
 
-项目当前更偏向"可构建、可验证、可手动部署"的开发者安装方式，而不是面向普通用户的一键安装包。
+```powershell
+$install = "C:\Program Files\win-symlinks"
+$machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+$newPath = (($machinePath -split ";") | Where-Object { $_ -and $_ -ne $install }) -join ";"
+[Environment]::SetEnvironmentVariable("Path", $newPath, "Machine")
+Remove-Item $install -Recurse -Force
+```
 
-## 许可证 (License)
+移除 PATH 条目后，请打开一个新的终端。
 
-双许可证 (Dual License)：
+## 安全模型 (Security Model)
 
-- MIT
-- Apache-2.0
+`WinSymlinksBroker` 以 `LocalSystem` 身份运行，因此它将每个请求都视为安全敏感的。在创建链接之前，Broker 会验证本地唯一的 IPC (进程间通信)、调用者身份、请求 Schema (模式)、调用者在链接父目录中的创建权限，以及源路径 Blacklist (黑名单) 策略。
+
+Broker 仅创建真实的 Windows 符号链接。
+
+### 被阻断的源目录 (Source Blacklist)
+
+为了确保系统安全，Broker 故意阻断在某些敏感目录中创建符号链接（即 `ln` 的源路径）。默认的源路径黑名单 (Source Blacklist) 包括：
+
+- `C:\Windows`（以及从 `SystemRoot` / `WINDIR` 派生的路径）
+- `C:\Program Files` 和 `C:\Program Files (x86)`
+- `C:\ProgramData`
+- `C:\System Volume Information`
+- `C:\$Recycle.Bin`
+- 卷根目录 (Volume roots，例如 `C:\`, `D:\`)
+- `C:\Users` 下其他用户的配置文件目录
+- UNC 管理共享 (例如 `\\server\C$`)
+
+用户可以通过编辑 `%ProgramData%\win-symlinks\config.json` 配置文件来扩展此黑名单。

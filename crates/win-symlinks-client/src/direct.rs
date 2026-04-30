@@ -24,12 +24,11 @@ use windows::{
 #[cfg(windows)]
 const FILE_ATTRIBUTE_REPARSE_POINT_BITS: u32 = 0x400;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TargetKind {
     File,
     #[serde(rename = "directory")]
-    #[value(name = "dir")]
     Dir,
 }
 
@@ -43,7 +42,7 @@ impl TargetKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CreateSymlinkOptions {
+pub struct DirectCreateOptions {
     pub link_path: PathBuf,
     pub target_path: PathBuf,
     pub target_kind: Option<TargetKind>,
@@ -74,7 +73,7 @@ pub enum DirectCreateOutcome {
 }
 
 pub fn decide_target_kind(
-    target_path: impl AsRef<std::path::Path>,
+    target_path: impl AsRef<Path>,
     hint: Option<TargetKind>,
 ) -> crate::Result<TargetKind> {
     match fs::metadata(target_path.as_ref()) {
@@ -170,7 +169,7 @@ pub fn inspect_link_path_state(path: impl AsRef<Path>) -> crate::Result<LinkPath
     }
 }
 
-pub fn try_direct_create(options: &CreateSymlinkOptions) -> crate::Result<DirectCreateOutcome> {
+pub fn try_direct_create(options: &DirectCreateOptions) -> crate::Result<DirectCreateOutcome> {
     let link_state = inspect_link_path_state(&options.link_path)?;
     let replacement_plan = plan_replacement(link_state, options.replace_existing_symlink)?;
 
@@ -396,7 +395,7 @@ mod tests {
         let link = temp_path("existing-link-path");
         let missing_target = temp_path("missing-target-for-existing-link");
         fs::write(&link, b"real file").unwrap();
-        let options = CreateSymlinkOptions {
+        let options = DirectCreateOptions {
             link_path: link.clone(),
             target_path: missing_target,
             target_kind: None,
