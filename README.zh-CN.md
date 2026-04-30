@@ -194,7 +194,7 @@ ln -s --win-kind=dir TARGET LINK_NAME
 
 ## 集成 (Integration)
 
-其他 Rust 项目和 AI 开发代理应使用公开的 client API，而不是复制 `ln.exe` 内部实现。参见 [Integration Guide](docs/integration.md)，了解 Rust API 示例、broker-only 用法和原始 Named Pipe JSON schema。
+其他 Rust 项目和 AI 开发代理应使用公开的 client API，而不是复制 `ln.exe` 内部实现。轻量 SDK crate 是 `win-symlinks-client`；参见 [Integration Guide](docs/integration.md)，了解依赖配置、Rust API 示例、broker-only 用法和原始 Named Pipe JSON schema。
 
 ## 管理命令 (Management Commands)
 

@@ -3,20 +3,32 @@
 This guide is for projects, tools, and AI coding agents that want to create real
 Windows symbolic links by reusing `win-symlinks`.
 
-The recommended integration surface is the Rust client API. Non-Rust projects
-may use the documented broker Named Pipe protocol, but should preserve the same
-security and true-symlink semantics.
+The recommended integration surface is the lightweight Rust client crate
+`win-symlinks-client`. Non-Rust projects may use the documented broker Named
+Pipe protocol, but should preserve the same security and true-symlink semantics.
 
 ## Recommended Rust API
 
-Add `win-symlinks` as a dependency from the local workspace or repository, then
-call `win_symlinks::client::create_symlink`.
+Add `win-symlinks-client` as a dependency from the repository:
+
+```toml
+[dependencies]
+win-symlinks-client = { git = "https://github.com/winddxr/win-symlinks", package = "win-symlinks-client" }
+```
+
+For local development against a checkout:
+
+```toml
+[dependencies]
+win-symlinks-client = { path = "../win-symlinks/crates/win-symlinks-client" }
+```
+
+Then call `win_symlinks_client::create_symlink`.
 
 ```rust
-use win_symlinks::client::{create_symlink, CreateSymlinkOptions};
-use win_symlinks::TargetKind;
+use win_symlinks_client::{create_symlink, CreateSymlinkOptions, TargetKind};
 
-fn main() -> win_symlinks::Result<()> {
+fn main() -> win_symlinks_client::Result<()> {
     create_symlink(
         CreateSymlinkOptions::new("..\\shared\\pkg", "node_modules\\pkg")
             .target_kind(TargetKind::Dir),
@@ -44,10 +56,11 @@ Use `create_symlink_via_broker` when the caller intentionally wants to skip the
 direct attempt and always use the installed service.
 
 ```rust
-use win_symlinks::client::{create_symlink_via_broker, CreateSymlinkOptions};
-use win_symlinks::TargetKind;
+use win_symlinks_client::{
+    create_symlink_via_broker, CreateSymlinkOptions, TargetKind,
+};
 
-fn main() -> win_symlinks::Result<()> {
+fn main() -> win_symlinks_client::Result<()> {
     create_symlink_via_broker(
         CreateSymlinkOptions::new("future-target.txt", "future-link.txt")
             .target_kind(TargetKind::File),
@@ -142,8 +155,8 @@ REPLACEMENT_PARTIALLY_COMPLETED
 
 ## Security And Semantics
 
-`win-symlinks` creates only real Windows symbolic links through
-`CreateSymbolicLinkW`.
+`win-symlinks-client` creates only real Windows symbolic links through
+`CreateSymbolicLinkW` directly or through `WinSymlinksBroker`.
 
 It must not fall back to:
 
@@ -158,9 +171,10 @@ before creating a link.
 
 ## Guidance For AI Development
 
-AI agents should integrate through `win_symlinks::client` or the raw protocol
+AI agents should integrate through `win_symlinks_client` or the raw protocol
 documented here.
 
-Do not copy and modify `src/bin/ln.rs` as the primary integration pattern.
+Do not copy and modify `crates/win-symlinks/src/bin/ln.rs` as the primary
+integration pattern.
 `ln.exe` is a command-line frontend with Linux-compatible argument handling; it
 is intentionally separate from the stable client API used by other projects.

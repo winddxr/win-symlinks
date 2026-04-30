@@ -12,14 +12,14 @@ The project name is:
 win-symlinks
 ```
 
-### Library Client API
+### `win-symlinks-client` Rust API
 
-The primary integration surface for Rust projects is the shared library client
-API:
+The primary integration surface for Rust projects is the lightweight
+`win-symlinks-client` crate:
 
 ```rust
-win_symlinks::client::create_symlink(options)
-win_symlinks::client::create_symlink_via_broker(options)
+win_symlinks_client::create_symlink(options)
+win_symlinks_client::create_symlink_via_broker(options)
 ```
 
 The public options preserve Linux `ln -s TARGET LINK_NAME` ordering:
@@ -45,7 +45,8 @@ Behavior:
 
 `ln.exe` is a user-facing command-line frontend and should be treated as a
 client API consumer. External projects and AI agents should use the library API
-or documented IPC schema rather than copying and modifying `src/bin/ln.rs`.
+or documented IPC schema rather than copying and modifying
+`crates/win-symlinks/src/bin/ln.rs`.
 
 ### Linux-Compatible Command
 
@@ -76,7 +77,7 @@ Behavior:
 - `-T` treats `LINK_NAME` as a normal link path rather than treating an existing destination directory as a container.
 - `--win-kind=file|dir` is a Windows-only extension used when `TARGET` does not exist and Windows requires the link type at creation time.
 - `--help` and `--version` do not contact the service.
-- Actual symlink creation is delegated to `win_symlinks::client`.
+- Actual symlink creation is delegated to `win_symlinks_client`.
 
 If a requested Linux `ln` mode would require hardlinks or another unsupported behavior, `ln.exe` must fail explicitly instead of emulating it with a different Windows object type.
 

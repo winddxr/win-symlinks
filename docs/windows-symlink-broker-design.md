@@ -11,12 +11,12 @@ The user-facing command is `ln.exe`, aligned as closely as practical with Linux 
 ```text
 ln.exe
   -> parses Linux-compatible ln arguments
-  -> calls win_symlinks::client
+  -> calls win_symlinks_client
   -> directly calls CreateSymbolicLinkW or calls WinSymlinksBroker when elevation is needed
   -> reports Linux-like success and error behavior
 
 External Rust projects
-  -> call win_symlinks::client
+  -> call win-symlinks-client
   -> reuse the same true-symlink direct-create and broker-fallback behavior
 
 win-symlinks.exe
@@ -83,8 +83,8 @@ win-symlinks
 The recommended integration surface for Rust projects is:
 
 ```rust
-win_symlinks::client::create_symlink(options)
-win_symlinks::client::create_symlink_via_broker(options)
+win_symlinks_client::create_symlink(options)
+win_symlinks_client::create_symlink_via_broker(options)
 ```
 
 The public options preserve Linux `ln -s TARGET LINK_NAME` ordering:
@@ -104,7 +104,7 @@ submits directly to the broker.
 
 `ln.exe` is a command-line frontend and client API consumer. External projects
 and AI agents should use the library API or documented IPC schema rather than
-copying and modifying `src/bin/ln.rs`.
+copying and modifying `crates/win-symlinks/src/bin/ln.rs`.
 
 ### Linux-Compatible Command
 
@@ -206,7 +206,7 @@ The normal execution path is:
 ```text
 User shell
   -> ln.exe
-  -> win_symlinks::client
+  -> win_symlinks_client
   -> direct CreateSymbolicLinkW or Named Pipe request
   -> WinSymlinksBroker when broker privileges are needed
   -> CreateSymbolicLinkW
@@ -217,7 +217,7 @@ External Rust projects should use the same shared client API:
 
 ```text
 External Rust project
-  -> win_symlinks::client
+  -> win-symlinks-client
   -> direct CreateSymbolicLinkW or Named Pipe request
   -> WinSymlinksBroker when broker privileges are needed
   -> CreateSymbolicLinkW
@@ -640,20 +640,19 @@ win-symlinks
 Recommended binaries:
 
 ```text
-src/bin/ln.rs
-src/bin/win-symlinks.rs
-src/bin/win-symlinks-broker.rs
+crates/win-symlinks/src/bin/ln.rs
+crates/win-symlinks/src/bin/win-symlinks.rs
+crates/win-symlinks/src/bin/win-symlinks-broker.rs
 ```
 
 Shared library modules:
 
 ```text
-src/ipc
-src/client
-src/path_policy
-src/symlink
-src/service
-src/config
+crates/win-symlinks-client
+crates/win-symlinks/src/ipc
+crates/win-symlinks/src/path_policy
+crates/win-symlinks/src/service
+crates/win-symlinks/src/config
 ```
 
 ### Responsibilities
@@ -662,10 +661,10 @@ src/config
 
 - Parse Linux-compatible arguments.
 - Decide CLI-specific link path, target path, force mode, and target kind.
-- Call `win_symlinks::client` for direct true symlink creation and broker fallback.
+- Call `win_symlinks_client` for direct true symlink creation and broker fallback.
 - Print Linux-like errors.
 
-`win_symlinks::client`:
+`win-symlinks-client`:
 
 - Provide the stable Rust integration API for creating real Windows symbolic links.
 - Preserve `ln -s TARGET LINK_NAME` target/link ordering in its public options.

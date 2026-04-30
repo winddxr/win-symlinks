@@ -1,7 +1,14 @@
-use crate::ipc::CreateSymlinkRequest;
-use crate::symlink::{DirectCreateOutcome, TargetKind};
-use crate::{ErrorCode, Result, WinSymlinksError};
+pub mod direct;
+pub mod error;
+pub mod pipe;
+pub mod protocol;
+pub mod service_identity;
+
 use std::path::{Path, PathBuf};
+
+pub use direct::TargetKind;
+pub use error::{ErrorCode, Result, WinSymlinksError};
+pub use protocol::{BrokerResponse, CreateSymlinkRequest, Operation, PROTOCOL_VERSION};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateSymlinkOptions {
@@ -34,7 +41,7 @@ impl CreateSymlinkOptions {
 
 pub fn create_symlink(options: CreateSymlinkOptions) -> Result<()> {
     let request = request_from_options(options)?;
-    let direct_options = crate::symlink::CreateSymlinkOptions {
+    let direct_options = direct::DirectCreateOptions {
         link_path: request.link_path.clone(),
         target_path: request.target_path.clone(),
         target_kind: request.target_kind,
@@ -42,14 +49,14 @@ pub fn create_symlink(options: CreateSymlinkOptions) -> Result<()> {
         allow_unprivileged_direct_create: true,
     };
 
-    match crate::symlink::try_direct_create(&direct_options)? {
-        DirectCreateOutcome::Created => Ok(()),
-        DirectCreateOutcome::NeedsBroker => crate::ipc::submit_create_symlink_request(request),
+    match direct::try_direct_create(&direct_options)? {
+        direct::DirectCreateOutcome::Created => Ok(()),
+        direct::DirectCreateOutcome::NeedsBroker => pipe::submit_create_symlink_request(request),
     }
 }
 
 pub fn create_symlink_via_broker(options: CreateSymlinkOptions) -> Result<()> {
-    crate::ipc::submit_create_symlink_request(request_from_options(options)?)
+    pipe::submit_create_symlink_request(request_from_options(options)?)
 }
 
 fn request_from_options(options: CreateSymlinkOptions) -> Result<CreateSymlinkRequest> {

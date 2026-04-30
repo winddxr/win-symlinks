@@ -1,10 +1,8 @@
 use clap::Parser;
 use std::io;
 use std::path::{Path, PathBuf};
-use win_symlinks::client::CreateSymlinkOptions;
-use win_symlinks::ipc::CreateSymlinkRequest;
-use win_symlinks::symlink::TargetKind;
 use win_symlinks::{ErrorCode, WinSymlinksError};
+use win_symlinks_client::{create_symlink, CreateSymlinkOptions, CreateSymlinkRequest, TargetKind};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -23,7 +21,7 @@ struct Cli {
     no_target_directory: bool,
 
     #[arg(long = "win-kind", value_enum)]
-    win_kind: Option<TargetKind>,
+    win_kind: Option<CliTargetKind>,
 
     #[arg(value_name = "PATH")]
     paths: Vec<PathBuf>,
@@ -33,6 +31,22 @@ struct Cli {
 struct ParsedLinkCommand {
     request: CreateSymlinkRequest,
     no_target_directory: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum CliTargetKind {
+    File,
+    #[value(name = "dir")]
+    Dir,
+}
+
+impl From<CliTargetKind> for TargetKind {
+    fn from(value: CliTargetKind) -> Self {
+        match value {
+            CliTargetKind::File => TargetKind::File,
+            CliTargetKind::Dir => TargetKind::Dir,
+        }
+    }
 }
 
 fn main() {
@@ -58,7 +72,7 @@ fn run(cli: Cli) -> Result<(), WinSymlinksError> {
         no_target_directory = command.no_target_directory
     );
 
-    win_symlinks::client::create_symlink(options)
+    create_symlink(options)
 }
 
 fn parse_link_command(cli: Cli) -> Result<ParsedLinkCommand, WinSymlinksError> {
@@ -81,7 +95,7 @@ fn parse_link_command(cli: Cli) -> Result<ParsedLinkCommand, WinSymlinksError> {
         request: CreateSymlinkRequest::new(
             link_path,
             cli.paths[0].clone(),
-            cli.win_kind,
+            cli.win_kind.map(TargetKind::from),
             cli.force,
         ),
         no_target_directory: cli.no_target_directory,
