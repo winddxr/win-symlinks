@@ -34,13 +34,26 @@ The normal execution path is:
 ```text
 User shell
   -> ln.exe
-  -> Named Pipe request
-  -> WinSymlinksBroker
+  -> win_symlinks_client
+  -> direct CreateSymbolicLinkW or Named Pipe request
+  -> WinSymlinksBroker when broker privileges are needed
   -> CreateSymbolicLinkW
   -> response to ln.exe
 ```
 
-`ln.exe` may first attempt direct symbolic link creation if the current process has the required privilege or Windows allows unprivileged creation. If direct creation fails because of privilege, it must call the broker. Direct creation and broker creation must both use the same true symbolic link semantics.
+External Rust projects should use the same shared client API:
+
+```text
+External Rust project
+  -> win-symlinks-client
+  -> direct CreateSymbolicLinkW or Named Pipe request
+  -> WinSymlinksBroker when broker privileges are needed
+  -> CreateSymbolicLinkW
+```
+
+`ln.exe` is a command-line frontend for Linux-compatible argument behavior. It should call `win_symlinks_client` rather than owning the reusable direct-create and broker-fallback orchestration. External projects should integrate through `crates/win-symlinks-client` or the documented IPC contract, not by copying `crates/win-symlinks/src/bin/ln.rs`.
+
+The client API may first attempt direct symbolic link creation if the current process has the required privilege or Windows allows unprivileged creation. If direct creation fails because of privilege, it must call the broker. Direct creation and broker creation must both use the same true symbolic link semantics.
 
 The broker is the stable path for systems where Developer Mode is disabled and the user account does not have `SeCreateSymbolicLinkPrivilege`.
 
@@ -52,14 +65,15 @@ Use these Rust dependencies:
 
 ```toml
 [dependencies]
-windows-service = "0.7"
-windows = { version = "0.58", features = [
+windows-service = "0.8"
+windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Storage_FileSystem",
   "Win32_System_Services",
   "Win32_System_Pipes",
   "Win32_System_Threading",
   "Win32_Security",
+  "Win32_Security_Authorization",
   "Win32_System_IO",
 ] }
 serde = { version = "1", features = ["derive"] }
@@ -76,38 +90,59 @@ Actual versions should be checked when implementation begins.
 
 ### Binary Layout
 
-Recommended Cargo package:
+Recommended Cargo workspace:
 
 ```text
-win-symlinks
+win-symlinks/
+  Cargo.toml
+  crates/
+    win-symlinks-client/
+    win-symlinks/
 ```
 
-Recommended binaries:
+Application crate binaries:
 
 ```text
-src/bin/ln.rs
-src/bin/win-symlinks.rs
-src/bin/win-symlinks-broker.rs
+crates/win-symlinks/src/bin/ln.rs
+crates/win-symlinks/src/bin/win-symlinks.rs
+crates/win-symlinks/src/bin/win-symlinks-broker.rs
 ```
 
-Shared library modules:
+Stable integration crate:
 
 ```text
-src/ipc
-src/path_policy
-src/symlink
-src/service
-src/config
+crates/win-symlinks-client
+  direct true symlink creation
+  Named Pipe client transport
+  broker protocol types
+  public Rust SDK API
+```
+
+Application/service crate modules:
+
+```text
+crates/win-symlinks/src/ipc
+crates/win-symlinks/src/path_policy
+crates/win-symlinks/src/service
+crates/win-symlinks/src/config
+crates/win-symlinks/src/doctor
 ```
 
 ### Responsibilities
 
 `ln.exe`:
 - Parse Linux-compatible arguments.
-- Decide link path, target path, force mode, and target kind.
-- Attempt direct true symlink creation if enabled.
-- Call broker on privilege failure.
+- Decide CLI-specific link path, target path, force mode, and target kind.
+- Call `win_symlinks_client` for direct true symlink creation and broker fallback.
 - Print Linux-like errors.
+
+`win-symlinks-client`:
+- Provide the stable Rust integration API for creating real Windows symbolic links.
+- Preserve `ln -s TARGET LINK_NAME` target/link ordering in its public options.
+- Resolve relative `link_path` against the caller current directory.
+- Attempt direct true symlink creation when appropriate.
+- Call the broker on privilege failure or broker-only operations.
+- Never fall back to junctions, hardlinks, copies, or `.lnk` shortcuts.
 
 `win-symlinks.exe`:
 - Install, uninstall, and query service status.
@@ -146,7 +181,7 @@ src/config
    - 并发模型设计
 
 3. **[客户端 CLI 与管理工具](./design-client-interfaces.md)**
-   - `ln.exe` (Linux 兼容命令) 与 `win-symlinks.exe` (管理命令) 接口定义
+   - `win-symlinks-client` Rust API, `ln.exe` (Linux 兼容命令) 与 `win-symlinks.exe` (管理命令) 接口定义
    - 无安装器的服务注册机制
    - 错误处理规范
    - 诊断 (Diagnostics) 流程
