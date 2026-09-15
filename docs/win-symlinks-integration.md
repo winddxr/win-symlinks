@@ -70,6 +70,30 @@ fn main() -> win_symlinks_client::Result<()> {
 
 This requires the `WinSymlinksBroker` service to be installed and reachable.
 
+## Broker Runtime Release Asset
+
+Downstream projects that need only the service runtime should download the
+broker-only release asset from a fixed tag URL:
+
+```text
+https://github.com/winddxr/win-symlinks/releases/download/v<VERSION>/win-symlinks-broker-v<VERSION>-x86_64-windows.zip
+```
+
+Do not depend on a floating `latest` URL for runtime provisioning. Each release
+also publishes `checksums-sha256.txt`, and that file includes the SHA256 digest
+for the broker-only zip.
+
+The broker-only archive contains:
+
+- `win-symlinks-broker.exe`
+- `install-broker.ps1`
+- `uninstall-broker.ps1`
+- `README-broker.md`
+
+It intentionally does not include `ln.exe` or `win-symlinks.exe`, so downstream
+tools can bundle only the fixed broker runtime they require. The Windows service
+name remains `WinSymlinksBroker`.
+
 ## Raw Named Pipe Protocol
 
 Non-Rust clients may connect to the local Named Pipe:

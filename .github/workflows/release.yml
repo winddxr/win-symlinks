@@ -15,35 +15,78 @@ jobs:
       - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build release binaries
-        run: cargo build --release
+      - name: Format
+        run: cargo fmt -- --check
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings
 
       - name: Run tests
         run: cargo test
 
-      - name: Prepare release archive
+      - name: Build release binaries
+        run: cargo build --release
+
+      - name: Prepare release archives
         shell: pwsh
         run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+
           $version = "${{ github.ref_name }}"
-          $staging = "staging"
-          New-Item -ItemType Directory -Force $staging | Out-Null
+          $target = "x86_64-windows"
+          $dist = "dist"
+          $fullPackage = "win-symlinks-$version-$target"
+          $brokerPackage = "win-symlinks-broker-$version-$target"
+          $fullStaging = Join-Path $dist $fullPackage
+          $brokerStaging = Join-Path $dist $brokerPackage
 
-          Copy-Item target\release\ln.exe                $staging\
-          Copy-Item target\release\win-symlinks.exe      $staging\
-          Copy-Item target\release\win-symlinks-broker.exe $staging\
-          Copy-Item install.ps1                          $staging\
+          Remove-Item $dist -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force $fullStaging, $brokerStaging | Out-Null
 
-          $archive = "win-symlinks-${version}-x86_64-windows.zip"
-          Compress-Archive -Path "$staging\*" -DestinationPath $archive
+          function Copy-RequiredFile {
+            param(
+              [Parameter(Mandatory = $true)][string]$Source,
+              [Parameter(Mandatory = $true)][string]$Destination
+            )
 
-          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLower()
-          "$hash  $archive" | Out-File -Encoding utf8 checksums-sha256.txt
+            if (-not (Test-Path -LiteralPath $Source -PathType Leaf)) {
+              throw "required release file was not found: $Source"
+            }
 
-          echo "ARCHIVE=$archive"         >> $env:GITHUB_ENV
-          echo "VERSION=$version"         >> $env:GITHUB_ENV
+            Copy-Item -LiteralPath $Source -Destination $Destination -Force
+          }
+
+          Copy-RequiredFile target\release\ln.exe $fullStaging
+          Copy-RequiredFile target\release\win-symlinks.exe $fullStaging
+          Copy-RequiredFile target\release\win-symlinks-broker.exe $fullStaging
+          Copy-RequiredFile install.ps1 $fullStaging
+
+          Copy-RequiredFile target\release\win-symlinks-broker.exe $brokerStaging
+          Copy-RequiredFile packaging\broker-runtime\install-broker.ps1 $brokerStaging
+          Copy-RequiredFile packaging\broker-runtime\uninstall-broker.ps1 $brokerStaging
+          Copy-RequiredFile packaging\broker-runtime\README-broker.md $brokerStaging
+
+          $fullArchive = "$fullPackage.zip"
+          $brokerArchive = "$brokerPackage.zip"
+
+          Compress-Archive -Path "$fullStaging\*" -DestinationPath $fullArchive -CompressionLevel Optimal -Force
+          Compress-Archive -Path "$brokerStaging\*" -DestinationPath $brokerArchive -CompressionLevel Optimal -Force
+
+          $checksumLines = @($fullArchive, $brokerArchive) | ForEach-Object {
+            $hash = (Get-FileHash $_ -Algorithm SHA256).Hash.ToLower()
+            "$hash  $_"
+          }
+          $checksumLines | Set-Content -Encoding utf8 checksums-sha256.txt
+
+          echo "FULL_ARCHIVE=$fullArchive"       >> $env:GITHUB_ENV
+          echo "BROKER_ARCHIVE=$brokerArchive"   >> $env:GITHUB_ENV
+          echo "VERSION=$version"                >> $env:GITHUB_ENV
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
@@ -51,6 +94,8 @@ jobs:
           name: ${{ env.VERSION }}
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') || startsWith(github.ref_name, 'v0.') }}
+          fail_on_unmatched_files: true
           files: |
-            ${{ env.ARCHIVE }}
+            ${{ env.FULL_ARCHIVE }}
+            ${{ env.BROKER_ARCHIVE }}
             checksums-sha256.txt

@@ -65,13 +65,18 @@ cargo run --bin win-symlinks -- --help
 
 ## 快速安装 (Quick Install)
 
-从 [Releases](https://github.com/winddxr/win-symlinks/releases) 页面下载最新发布的 zip 文件，提取文件，然后以管理员身份运行 `install.ps1`：
+从 [Releases](https://github.com/winddxr/win-symlinks/releases) 页面下载固定 tag 对应的发布 zip 文件，使用 `checksums-sha256.txt` 校验后提取文件，然后以管理员身份运行 `install.ps1`：
 
 ```powershell
 .\install.ps1
 ```
 
 该脚本会将三个可执行文件复制到 `C:\Program Files\win-symlinks`（或通过 `-InstallDir` 指定的自定义路径），将该目录添加到系统 `PATH`，注册并启动 Broker Service (代理服务)，然后运行冒烟测试以验证安装。
+
+每个 release 还会发布名为
+`win-symlinks-broker-v<VERSION>-x86_64-windows.zip` 的 broker-only runtime
+asset。它只包含 `win-symlinks-broker.exe`、Broker 服务安装/卸载脚本和
+Broker runtime README，供不想打包 `ln.exe` 或 `win-symlinks.exe` 的下游项目使用。
 
 ## 手动安装 (Manual Install)
 

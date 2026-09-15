@@ -71,9 +71,10 @@ cargo run --bin win-symlinks -- --help
 
 ## Quick Install
 
-Download the latest release zip from the
-[Releases](https://github.com/winddxr/win-symlinks/releases) page, extract the
-files, then run `install.ps1` as Administrator:
+Download a tagged release zip from the
+[Releases](https://github.com/winddxr/win-symlinks/releases) page, verify it
+against `checksums-sha256.txt`, extract the files, then run `install.ps1` as
+Administrator:
 
 ```powershell
 .\install.ps1
@@ -82,6 +83,12 @@ files, then run `install.ps1` as Administrator:
 The script copies the three executables to `C:\Program Files\win-symlinks` (or a
 custom path via `-InstallDir`), adds the directory to Machine `PATH`, registers
 and starts the broker service, and runs a smoke test to verify the installation.
+
+Each release also publishes a broker-only runtime asset named
+`win-symlinks-broker-v<VERSION>-x86_64-windows.zip`. It contains only
+`win-symlinks-broker.exe`, broker service install/uninstall scripts, and a
+broker runtime README for downstream projects that do not want to bundle
+`ln.exe` or `win-symlinks.exe`.
 
 ## Manual Install
 
